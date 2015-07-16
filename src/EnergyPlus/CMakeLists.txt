@@ -248,6 +248,8 @@ SET( SRC
   HVACDXSystem.hh
   HVACDuct.cc
   HVACDuct.hh
+  HVACFourPipeBeam.cc
+  HVACFourPipeBeam.hh
   HVACHXAssistedCoolingCoil.cc
   HVACHXAssistedCoolingCoil.hh
   HVACInterfaceManager.cc
