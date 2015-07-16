@@ -38630,6 +38630,34 @@ AirTerminal:SingleDuct:ConstantVolume:FourPipeInduction,
        \type object-list
        \object-list ZoneMixers
 
+AirTerminal:SingleDuct:ConstantVolume:FourPipeBeam
+       \memo Central air system terminal unit, single duct, constant volume, 
+       \memo with heating and/or cooling.  
+       \memo Operates as two-pipe unit if heating or cooling water is omitted.
+       \memo Heating and/or cooling can be scheduled off for dedicated ventilation.
+  A1 , \field Name
+       \type alpha
+       \required-field
+  A2 , \field Primary Air Availability Schedule Name
+       \note Primary air is supplied by central air handling unit and must be on for heating or cooling.
+       \note Schedule value > 0 means the primary air supply is available.
+       \note If this field is blank, the primary air supply is always available.
+       \type object-list
+       \object-list ScheduleNames
+  A3 , \field Cooling Availability Schedule Name
+       \note Cooling operation can be controlled separately using this availability schedule.
+       \note Schedule value > 0 means beam cooling is available.
+       \note If this field is blank, the beam cooling is always available (as long as primary air is also available).
+       \type object-list
+       \object-list ScheduleNames
+  A4 , \field Heating Availability Schedule Name
+       \note Heating operation can be controlled separately using this availability schedule.
+       \note Schedule value > 0 means beam heating is available.
+       \note If this field is blank, the beam heating is always available (as long as primary air is also available).
+       \type object-list
+       \object-list ScheduleNames
+  A5 , \
+  
 AirTerminal:SingleDuct:ConstantVolume:CooledBeam,
        \memo Central air system terminal unit, single duct, constant volume, with cooled beam
        \memo (active or passive).

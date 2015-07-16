@@ -91,36 +91,37 @@ namespace HVACFourPipeBeam {
 		// Get the  unit index
 		if ( CompIndex == 0 ) {
 			BeamNum = FindItemInList( CompName, FourPipeBeam.Name(), NumFourPipeBeams );
-			if ( CBNum == 0 ) {
-				ShowFatalError( "SimCoolBeam: Cool Beam Unit not found=" + CompName );
+			if ( BeamNum == 0 ) {
+				ShowFatalError( "SimFourPipeBeam: Four Pipe Beam Unit not found=" + CompName );
 			}
-			CompIndex = CBNum;
+			CompIndex = BeamNum;
 		} else {
-			CBNum = CompIndex;
-			if ( CBNum > NumCB || CBNum < 1 ) {
-				ShowFatalError( "SimCoolBeam: Invalid CompIndex passed=" + TrimSigDigits( CompIndex ) + ", Number of Cool Beam Units=" + TrimSigDigits( NumCB ) + ", System name=" + CompName );
+			BeamNum = CompIndex;
+			if ( BeamNum > NumFourPipeBeams || BeamNum < 1 ) {
+				ShowFatalError( "SimFourPipeBeam: Invalid CompIndex passed=" + TrimSigDigits( CompIndex ) + ", Number of Four Pipe Beam Units=" + TrimSigDigits( NumFourPipeBeams ) + ", air terminal name=" + CompName );
 			}
-			if ( CheckEquipName( CBNum ) ) {
-				if ( CompName != CoolBeam( CBNum ).Name ) {
-					ShowFatalError( "SimCoolBeam: Invalid CompIndex passed=" + TrimSigDigits( CompIndex ) + ", Cool Beam Unit name=" + CompName + ", stored Cool Beam Unit for that index=" + CoolBeam( CBNum ).Name );
+			if ( CheckEquipName( BeamNum ) ) {
+				if ( CompName != FourPipeBeam( BeamNum ).Name ) {
+					ShowFatalError( "SimFourPipeBeam: Invalid CompIndex passed=" + TrimSigDigits( CompIndex ) + ", Four Pipe Beam Unit name=" + CompName + ", stored Four Pipe Beam Unit for that index=" + FourPipeBeam( BeamNum ).Name );
 				}
 				CheckEquipName( CBNum ) = false;
 			}
 		}
-		if ( CBNum == 0 ) {
-			ShowFatalError( "Cool Beam Unit not found = " + CompName );
+		if ( BeamNum == 0 ) {
+			ShowFatalError( "Four Pipe Beam Unit not found = " + CompName );
 		}
 
 		// initialize the unit
-		InitFourPipeBeam( CBNum, FirstHVACIteration );
+		InitFourPipeBeam( BeamNum, FirstHVACIteration );
 
-		ControlFourPipeBeam( CBNum, ZoneNum, ZoneNodeNum, FirstHVACIteration, NonAirSysOutput );
+		// control and simulate the beam
+		ControlFourPipeBeam( BeamNum, ZoneNum, ZoneNodeNum, FirstHVACIteration, NonAirSysOutput );
 
-		// Update the current unit's outlet nodes. No update needed
-		UpdateFourPipeBeam( CBNum );
+		// Update the current unit's outlet nodes. 
+		UpdateFourPipeBeam( BeamNum );
 
-		// Fill the report variables. There are no report variables
-		ReportFourPipeBeam( CBNum );
+		// Fill the report variables. 
+		ReportFourPipeBeam( BeamNum );
 
 	}
 
@@ -128,23 +129,6 @@ namespace HVACFourPipeBeam {
 	GetFourPipeBeams()
 	{
 
-		// SUBROUTINE INFORMATION:
-		//       AUTHOR         Fred Buhl
-		//       DATE WRITTEN   Feb 3, 2009
-		//       MODIFIED       na
-		//       RE-ENGINEERED  na
-
-		// PURPOSE OF THIS SUBROUTINE:
-		// Obtains input data for cool beam units and stores it in the
-		// cool beam unit data structures
-
-		// METHODOLOGY EMPLOYED:
-		// Uses "Get" routines to read in data.
-
-		// REFERENCES:
-		// na
-
-		// Using/Aliasing
 		using InputProcessor::GetNumObjectsFound;
 		using InputProcessor::GetObjectItem;
 		using InputProcessor::VerifyName;
@@ -160,24 +144,11 @@ namespace HVACFourPipeBeam {
 		using WaterCoils::GetCoilWaterInletNode;
 		using namespace DataIPShortCuts;
 
-		// Locals
-		// SUBROUTINE ARGUMENT DEFINITIONS:
-		// na
 
-		// SUBROUTINE PARAMETER DEFINITIONS:
-		static std::string const RoutineName( "GetCoolBeams " ); // include trailing blank space
+		static std::string const RoutineName( "GetFourPipeBeams " ); // include trailing blank space
 
-		// INTERFACE BLOCK SPECIFICATIONS:
-		// na
-
-		// DERIVED TYPE DEFINITIONS:
-		// na
-
-		// SUBROUTINE LOCAL VARIABLE DECLARATIONS:
-		// na
-
-		int CBIndex; // loop index
-		int CBNum; // current fan coil number
+		int BeamIndex; // loop index
+		int BeamNum; // current beam number
 		std::string CurrentModuleObject; // for ease in getting objects
 		Array1D_string Alphas; // Alpha input items for object
 		Array1D_string cAlphaFields; // Alpha field names
@@ -199,11 +170,11 @@ namespace HVACFourPipeBeam {
 		int ADUNum;
 
 		// find the number of cooled beam units
-		CurrentModuleObject = "AirTerminal:SingleDuct:ConstantVolume:CooledBeam";
-		NumCB = GetNumObjectsFound( CurrentModuleObject );
+		CurrentModuleObject = "AirTerminal:SingleDuct:ConstantVolume:FourPipeBeam";
+		NumFourPipeBeams = GetNumObjectsFound( CurrentModuleObject );
 		// allocate the data structures
-		CoolBeam.allocate( NumCB );
-		CheckEquipName.dimension( NumCB, true );
+		FourPipeBeam.allocate( NumFourPipeBeams );
+		CheckEquipName.dimension( NumFourPipeBeams, true );
 
 		GetObjectDefMaxArgs( CurrentModuleObject, TotalArgs, NumAlphas, NumNumbers );
 		NumAlphas = 7;
