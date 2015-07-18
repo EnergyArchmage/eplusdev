@@ -38656,8 +38656,149 @@ AirTerminal:SingleDuct:ConstantVolume:FourPipeBeam
        \note If this field is blank, the beam heating is always available (as long as primary air is also available).
        \type object-list
        \object-list ScheduleNames
-  A5 , \
-  
+  A5 , \field Primary Air Inlet Node Name
+       \note Name of the air system node for primary supply air entering the air distribution unit.
+       \type node
+       \required-field
+  A6 , \field Primary Air Outlet Node Name
+       \note Name of the air system node for primary supply air leaving the air distribution unit and entering the zone.
+       \type node
+       \required-field
+  A7 , \field Chilled Water Inlet Node Name
+       \note Name of the plant system node for chilled water entering the beam.
+       \note The two chilled water nodes can be omitted to model a two-pipe heating only beam.
+       \type node
+  A8 , \field Chilled Water Outlet Node Name
+       \note Name of the plant system node for chilled water leaving the beam.
+       \type node
+  A9 , \field Hot Water Inlet Node Name
+       \note Name of the plant system node for hot water entering the beam.
+       \note The two hot water nodes can be omitted to model a two-pipe cooling-only beam.
+       \type node
+  A10, \field Hot Water Outlet Node Name
+       \note Name of the plant system node for hot water leaving the beam.
+       \type node
+  N1 , \field Design Primary Air Volume Flow Rate
+       \type real
+       \units m3/s
+       \minimum 0.0
+       \autosizable
+       \default autosize
+  N2   \field Design Chilled Water Volume Flow Rate
+       \type real
+       \units m3/s
+       \minimum 0.0
+       \autosizable
+       \default autosize
+  N3 , \field Design Hot Water Volume Flow Rate
+       \type real
+       \units m3/s
+       \minimum 0.0
+       \autosizable
+       \default autosize
+  N4 , \field Zone Total Beam Length
+       \note Sum of the length of all the beam units in the zone represented by this terminal unit.
+       \type real
+       \units m
+       \minimum> 0.0
+       \autosizable
+       \default autosize
+  N5 , \field Rated Primary Air Flow Rate per Meter
+       \note Primary air supply flow rate normalized by beam length.
+       \type real
+       \units m3/s-m
+       \minimum> 0.0
+       \autosizable
+       \default autosize
+  N6 , \field Rated Beam Cooling Capacity per Meter
+       \note Sensible cooling capacity per meter of beam length at the rating point.
+       \type real
+       \units W/m
+       \minimum> 0.0
+       \autosizable
+       \default autosize
+  N7 , \field Rated Cooling Room Air Chilled Water Temperature Difference
+       \note Difference in temperature between the zone air and the entering chilled water at the rating point.
+       \type real
+       \units deltaC
+       \minimum> 0.0
+       \default 10.0
+  N8 , \field Rated Chilled Water Volume Flow Rate per Meter
+       \note The volume flow rate of chilled water per meter of beam length at the rating point.
+       \type real
+       \units m3/s-m
+       \minimum> 0.0
+       \default 0.00005
+  A11, \field Beam Cooling Capacity Temperature Difference Modification Factor Curve or Table Name
+       \note Adjusts beam cooling capacity when the temperature difference between entering water and zone air
+       \note is different than at the rating point.  Single independent variable is the ratio of the current 
+       \note temperature difference divided by the rating point temperature difference.
+       \note This field is required when beam is connected to a chilled water plant.
+       \type object-list
+       \object-list QuadraticCubicCurves
+       \object-list UniVariateTables
+  A12, \field Beam Cooling Capacity Air Flow Modification Factor Curve or Table Name
+       \note Adjusts beam cooling capacity when the primary air supply flow rate is different 
+       \note than at the rating point. The single independent variable is the current normalized
+       \note air flow rate divided by the normalized air flow rate at the rating point.
+       \note This field is required when beam is connected to a chilled water plant.
+       \type object-list
+       \object-list QuadraticCubicCurves
+       \object-list UniVariateTables
+  A13, \field Beam Cooling Capacity Chilled Water Flow Modification Factor Curve or Table Name
+       \note Adjusts beam cooling capacity when the normalized chilled water flow rate is different 
+       \note than at the rating point. The single independent variable is the current normalized
+       \note chilled water flow rate divided by the normalized chilled water flow rate at the rating point.
+       \note This field is required when beam is connected to a chilled water plant.
+       \type object-list
+       \object-list QuadraticCubicCurves
+       \object-list UniVariateTables
+  N9 , \field Rated Beam Heating Capacity per Meter
+       \note Sensible heating capacity per meter of beam length at the rating point.
+       \type real
+       \units W/m
+       \minimum> 0.0
+       \autosizable
+       \default autosize
+  N10, \field Rated Heating Room Air Hot Water Temperature Difference
+       \note Difference in temperature between the zone air and the entering hot water at the rating point.
+       \type real
+       \units deltaC
+       \minimum> 0.0
+       \default 27.8
+  N11, \field Rated Hot Water Volume Flow Rate per Meter
+       \note The volume flow rate of hoy water per meter of beam length at the rating point.
+       \type real
+       \units m3/s-m
+       \minimum> 0.0
+       \default 0.00005
+  A14, \field Beam Heating Capacity Temperature Difference Modification Factor Curve or Table Name
+       \note Adjusts beam heating capacity when the temperature difference between entering water and zone air
+       \note is different than at the rating point.  Single independent variable is the ratio of the current 
+       \note temperature difference divided by the rating point temperature difference.
+       \note This field is required when beam is connected to a hot water plant.
+       \type object-list
+       \object-list QuadraticCubicCurves
+       \object-list UniVariateTables
+  A15, \field Beam Heating Capacity Air Flow Modification Factor Curve or Table Name
+       \note Adjusts beam heating capacity when the primary air supply flow rate is different 
+       \note than at the rating point. The single independent variable is the current normalized
+       \note air flow rate divided by the normalized air flow rate at the rating point.
+       \note This field is required when beam is connected to a hot water plant.
+       \type object-list
+       \object-list QuadraticCubicCurves
+       \object-list UniVariateTables
+  A16; \field Beam Heating Capacity Chilled Water Flow Modification Factor Curve or Table Name
+       \note Adjusts beam heating capacity when the normalized hot water flow rate is different 
+       \note than at the rating point. The single independent variable is the current normalized
+       \note hot water flow rate divided by the normalized hot water flow rate at the rating point.
+       \note This field is required when beam is connected to a hot water plant.
+       \type object-list
+       \object-list QuadraticCubicCurves
+       \object-list UniVariateTables
+
+
+
 AirTerminal:SingleDuct:ConstantVolume:CooledBeam,
        \memo Central air system terminal unit, single duct, constant volume, with cooled beam
        \memo (active or passive).
