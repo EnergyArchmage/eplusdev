@@ -38684,7 +38684,7 @@ AirTerminal:SingleDuct:ConstantVolume:FourPipeBeam
        \minimum 0.0
        \autosizable
        \default autosize
-  N2   \field Design Chilled Water Volume Flow Rate
+  N2 , \field Design Chilled Water Volume Flow Rate
        \type real
        \units m3/s
        \minimum 0.0
@@ -38708,15 +38708,13 @@ AirTerminal:SingleDuct:ConstantVolume:FourPipeBeam
        \type real
        \units m3/s-m
        \minimum> 0.0
-       \autosizable
-       \default autosize
+       \default 0.035
   N6 , \field Rated Beam Cooling Capacity per Meter
        \note Sensible cooling capacity per meter of beam length at the rating point.
        \type real
        \units W/m
        \minimum> 0.0
-       \autosizable
-       \default autosize
+       \default 600.0
   N7 , \field Rated Cooling Room Air Chilled Water Temperature Difference
        \note Difference in temperature between the zone air and the entering chilled water at the rating point.
        \type real
@@ -38758,8 +38756,7 @@ AirTerminal:SingleDuct:ConstantVolume:FourPipeBeam
        \type real
        \units W/m
        \minimum> 0.0
-       \autosizable
-       \default autosize
+       \default 1500.0
   N10, \field Rated Heating Room Air Hot Water Temperature Difference
        \note Difference in temperature between the zone air and the entering hot water at the rating point.
        \type real
@@ -38788,7 +38785,7 @@ AirTerminal:SingleDuct:ConstantVolume:FourPipeBeam
        \type object-list
        \object-list QuadraticCubicCurves
        \object-list UniVariateTables
-  A16; \field Beam Heating Capacity Chilled Water Flow Modification Factor Curve or Table Name
+  A16; \field Beam Heating Capacity Hot Water Flow Modification Factor Curve or Table Name
        \note Adjusts beam heating capacity when the normalized hot water flow rate is different 
        \note than at the rating point. The single independent variable is the current normalized
        \note hot water flow rate divided by the normalized hot water flow rate at the rating point.

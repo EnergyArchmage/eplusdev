@@ -28,15 +28,18 @@ namespace HVACFourPipeBeam {
 		int HeatingAvailSchedNum; // index to schedule for heating availability
 		bool HeatingAvailable; // true if beam heating is available
 		Real64 VdotDesignPrimAir; // Design primary air volume flow rate m3/s (autosizable)
+		bool VdotDesignPrimAirWasAutosized; // true if user input for design air flow was autsized on input
 		Real64 MdotDesignPrimAir; // Design primary air mass flow rate kg/s
 		int AirInNodeNum; // unit air inlet system node number
 		int AirOutNodeNum; // unit air outlet system node number
 		Real64 TotBeamLength; // length of all the beams in the zone (autosizable) (m)
+		bool TotBeamLengthWasAutosized; // true if beam length was autosized on input
 		Real64 VdotNormRatedPrimAir; // normalized primary air volume flow rate at rating point (m3/s-m)
 		Real64 MdotNormRatedPrimAir; // normalized primary air mass flow rate at rating point (kg/s-m)
 		//cooling
 		bool BeamCoolingPresent;  // true if chilled water system is connected to beam
 		Real64 VdotDesignCW; // Design chilled water volume flow rate (autosizable) (m3/s)
+		bool VdotDesignCWWasAutosized; // true if use input for chilled water flow was autosized
 		Real64 MdotDesignCW; // Design chilled water mass flow rate (kg/s)
 		Real64 QdotNormRatedCooling; // normalized cooling capacity at rating point (W/m)
 		Real64 DeltaTempRatedCooling; // temperature difference between zone air and entering chilled water at rating point (delta C)
@@ -57,6 +60,7 @@ namespace HVACFourPipeBeam {
 		//heating
 		bool BeamHeatingPresent; // true if hot water system is connected to beam
 		Real64 VdotDesignHW; // Design hot water volume flow rate (autosizable) (m3/s)
+		bool VdotDesignHWWasAutosized; // true if user input for hot water flow was autosized
 		Real64 MdotDesignHW; // Design hot water mass flow rate (kg/s)
 		Real64 QdotNormRatedHeating; // normalized heating capacity at rating point (W/m)
 		Real64 DeltaTempRatedHeating; // temperature difference between zone air and entering hot water at rating point (delta C)
