@@ -334,7 +334,7 @@ namespace HVACFourPipeBeam {
 		using InputProcessor::SameString;
 		using DataPlant::PlantLoop;
 		using DataPlant::ScanPlantLoopsForObject;
-		using DataPlant::TypeOf_CooledBeamAirTerminal;
+		using DataPlant::TypeOf_FourPipeBeamAirTerminal;
 		using FluidProperties::GetDensityGlycol;
 		using PlantUtilities::InitComponentNodes;
 		using PlantUtilities::SetComponentFlowRate;
@@ -367,7 +367,7 @@ namespace HVACFourPipeBeam {
 		std::string CurrentModuleObject;
 		bool errFlag;
 
-		CurrentModuleObject = "AirTerminal:SingleDuct:ConstantVolume:CooledBeam";
+		CurrentModuleObject = "AirTerminal:SingleDuct:ConstantVolume:FourPipeBeam";
 		// Do the one time initializations
 		if ( MyOneTimeFlag ) {
 
@@ -383,7 +383,7 @@ namespace HVACFourPipeBeam {
 
 		if ( PlantLoopScanFlag( CBNum ) && allocated( PlantLoop ) ) {
 			errFlag = false;
-			ScanPlantLoopsForObject( CoolBeam( CBNum ).Name, TypeOf_CooledBeamAirTerminal, CoolBeam( CBNum ).CWLoopNum, CoolBeam( CBNum ).CWLoopSideNum, CoolBeam( CBNum ).CWBranchNum, CoolBeam( CBNum ).CWCompNum, _, _, _, _, _, errFlag );
+			ScanPlantLoopsForObject( CoolBeam( CBNum ).Name, TypeOf_FourPipeBeamAirTerminal, CoolBeam( CBNum ).CWLoopNum, CoolBeam( CBNum ).CWLoopSideNum, CoolBeam( CBNum ).CWBranchNum, CoolBeam( CBNum ).CWCompNum, _, _, _, _, _, errFlag );
 			if ( errFlag ) {
 				ShowFatalError( "InitCoolBeam: Program terminated for previous conditions." );
 			}

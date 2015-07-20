@@ -14,6 +14,7 @@ set( test_src
   DataPlant.unit.cc
   DataZoneEquipment.unit.cc
   DXCoils.unit.cc
+  EMSManager.unit.cc
   EvaporativeCoolers.unit.cc
   ExteriorEnergyUse.unit.cc
   Fans.unit.cc
@@ -38,6 +39,7 @@ set( test_src
   OutputProcessor.unit.cc
   OutputReportTabular.unit.cc
   ReportSizingManager.unit.cc
+  RoomAirModelUserTempPattern.unit.cc
   SecondaryDXCoils.unit.cc
   SetPointManager.unit.cc
   SizingAnalysisObjects.unit.cc

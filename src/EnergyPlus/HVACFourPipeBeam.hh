@@ -189,7 +189,7 @@ namespace HVACFourPipeBeam {
 
 	void
 	InitFourPipeBeam(
-		int const CBNum, // number of the current beam unit being simulated
+		int const BeamNum, // number of the current beam unit being simulated
 		bool const FirstHVACIteration // TRUE if first air loop solution this HVAC step
 	);
 
@@ -198,7 +198,7 @@ namespace HVACFourPipeBeam {
 
 	void
 	ControlFourPipeBeam(
-		int const CBNum, // number of the current unit being simulated
+		int const BeamNum, // number of the current unit being simulated
 		int const ZoneNum, // number of zone being served
 		int const ZoneNodeNum, // zone node number
 		bool const FirstHVACIteration, // TRUE if 1st HVAC simulation of system timestep
@@ -207,12 +207,12 @@ namespace HVACFourPipeBeam {
 
 	void
 	CalcFourPipeBeam(
-		int const CBNum, // Unit index
+		int const BeamNum, // Unit index
 		int const ZoneNode, // zone node number
 		Real64 const CWFlow, // chilled water flow [kg/s]
+		Real64 const HWFlow, // hot water flow [kg/s]
 		Real64 & LoadMet, // load met by unit [W]
 		Real64 & CWTempOut // chilled water outlet temperature [C]
-		Real64 const HWFlow, // hot water flow [kg/s]
 		Real64 & HWTempOut, // hot water outlet temperature [C]
 	);
 
@@ -222,14 +222,14 @@ namespace HVACFourPipeBeam {
 	);
 
 	void
-	UpdateFourPipeBeam( int const CBNum );
+	UpdateFourPipeBeam( int const BeamNum );
 
 	void
-	ReportFourPipeBeam( int const CBNum );
+	ReportFourPipeBeam( int const BeamNum );
 
 	//     NOTICE
 
-	//     Copyright © 1996-2014 The Board of Trustees of the University of Illinois
+	//     Copyright (c) 1996-2014 The Board of Trustees of the University of Illinois
 	//     and The Regents of the University of California through Ernest Orlando Lawrence
 	//     Berkeley National Laboratory.  All rights reserved.
 
