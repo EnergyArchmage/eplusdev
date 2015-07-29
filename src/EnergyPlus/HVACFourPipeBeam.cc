@@ -292,26 +292,55 @@ namespace HVACFourPipeBeam {
 				ErrorsFound = true;
 			}
 			// Register component set data
-			TestCompSet( CurrentModuleObject, CoolBeam( CBNum ).Name, NodeID( CoolBeam( CBNum ).AirInNode ), NodeID( CoolBeam( CBNum ).AirOutNode ), "Air Nodes" );
-			TestCompSet( CurrentModuleObject, CoolBeam( CBNum ).Name, NodeID( CoolBeam( CBNum ).CWInNode ), NodeID( CoolBeam( CBNum ).CWOutNode ), "Water Nodes" );
+			TestCompSet( cCurrentModuleObject, thisBeam->name, NodeID( thisBeam->airInNodeNum ), 
+							NodeID( thisBeam->airOutNodeNum ), "Air Nodes" );
+			if ( thisBeam->beamCoolingPresent ) {
+				TestCompSet( cCurrentModuleObject, thisBeam->name, NodeID( thisBeam->cWInNodeNum ),
+							NodeID( thisBeam->cWOutNodeNum ), "Water Nodes" );
+			}
+			if ( thisBeam->beamHeatingPresent ) {
+				TestCompSet( cCurrentModuleObject, thisBeam->name, NodeID( thisBeam->hWInNodeNum ),
+							NodeID( thisBeam->hWOutNodeNum ), "Water Nodes" );
+			}
 
 			//Setup the Cooled Beam reporting variables
-			SetupOutputVariable( "Zone Air Terminal Beam Sensible Cooling Energy [J]", CoolBeam( CBNum ).BeamCoolingEnergy, "System", "Sum", CoolBeam( CBNum ).Name, _, "ENERGYTRANSFER", "COOLINGCOILS", _, "System" );
-			SetupOutputVariable( "Zone Air Terminal Beam Chilled Water Energy [J]", CoolBeam( CBNum ).BeamCoolingEnergy, "System", "Sum", CoolBeam( CBNum ).Name, _, "PLANTLOOPCOOLINGDEMAND", "COOLINGCOILS", _, "System" );
-			SetupOutputVariable( "Zone Air Terminal Beam Sensible Cooling Rate [W]", CoolBeam( CBNum ).BeamCoolingRate, "System", "Average", CoolBeam( CBNum ).Name );
-			SetupOutputVariable( "Zone Air Terminal Supply Air Sensible Cooling Energy [J]", CoolBeam( CBNum ).SupAirCoolingEnergy, "System", "Sum", CoolBeam( CBNum ).Name );
-			SetupOutputVariable( "Zone Air Terminal Supply Air Sensible Cooling Rate [W]", CoolBeam( CBNum ).SupAirCoolingRate, "System", "Average", CoolBeam( CBNum ).Name );
-			SetupOutputVariable( "Zone Air Terminal Supply Air Sensible Heating Energy [J]", CoolBeam( CBNum ).SupAirHeatingEnergy, "System", "Sum", CoolBeam( CBNum ).Name );
-			SetupOutputVariable( "Zone Air Terminal Supply Air Sensible Heating Rate [W]", CoolBeam( CBNum ).SupAirHeatingRate, "System", "Average", CoolBeam( CBNum ).Name );
+			if ( thisBeam->beamCoolingPresent ) {
+				SetupOutputVariable( "Zone Air Terminal Beam Sensible Cooling Energy [J]", 
+					thisBeam->beamCoolingEnergy, "System", "Sum", thisBeam->name, _, 
+					"ENERGYTRANSFER", "COOLINGCOILS", "Four Pipe Beam", "System" );
+				SetupOutputVariable( "Zone Air Terminal Beam Sensible Cooling Rate [W]", 
+					thisBeam->beamCoolingRate, "System", "Average", thisBeam->name );
+			}
+			if ( thisBeam->beamHeatingPresent ) {
+				SetupOutputVariable( "Zone Air Terminal Beam Sensible Heating Energy [J]", 
+					thisBeam->beamHeatingEnergy, "System", "Sum", thisBeam->name, _, 
+					"ENERGYTRANSFER", "HEATINGCOILS", "Four Pipe Beam", "System" );
+				SetupOutputVariable( "Zone Air Terminal Beam Sensible Heating Rate [W]", 
+					thisBeam->beamHeatingRate, "System", "Average", thisBeam->name );
+			}
+			SetupOutputVariable( "Zone Air Terminal Primary Air Sensible Cooling Energy [J]", 
+				thisBeam->supAirCoolingEnergy, "System", "Sum", thisBeam->name );
+			SetupOutputVariable( "Zone Air Terminal Primary Air Sensible Cooling Rate [W]", 
+				thisBeam->supAirCoolingRate, "System", "Average", thisBeam->name );
+			SetupOutputVariable( "Zone Air Terminal Primary Air Sensible Heating Energy [J]", 
+				thisBeam->supAirHeatingEnergy, "System", "Sum", thisBeam->name );
+			SetupOutputVariable( "Zone Air Terminal Primary Air Sensible Heating Rate [W]", 
+				thisBeam->supAirHeatingRate, "System", "Average", thisBeam->name );
+			SetupOutputVariable( "Zone Air Terminal Primary Air Flow Rate [m3/s]", 
+				thisBeam->primAirFlow, "System", "Average", thisBeam->name );
 
 			// Fill the Zone Equipment data with the supply air inlet node number of this unit.
 			AirNodeFound = false;
 			for ( CtrlZone = 1; CtrlZone <= NumOfZones; ++CtrlZone ) {
 				if ( ! ZoneEquipConfig( CtrlZone ).IsControlled ) continue;
 				for ( SupAirIn = 1; SupAirIn <= ZoneEquipConfig( CtrlZone ).NumInletNodes; ++SupAirIn ) {
-					if ( CoolBeam( CBNum ).AirOutNode == ZoneEquipConfig( CtrlZone ).InletNode( SupAirIn ) ) {
-						ZoneEquipConfig( CtrlZone ).AirDistUnitCool( SupAirIn ).InNode = CoolBeam( CBNum ).AirInNode;
-						ZoneEquipConfig( CtrlZone ).AirDistUnitCool( SupAirIn ).OutNode = CoolBeam( CBNum ).AirOutNode;
+					if ( thisBeam->airOutNodeNum == ZoneEquipConfig( CtrlZone ).InletNode( SupAirIn ) ) {
+						ZoneEquipConfig( CtrlZone ).AirDistUnitCool( SupAirIn ).InNode = thisBeam->airInNodeNum;
+						ZoneEquipConfig( CtrlZone ).AirDistUnitCool( SupAirIn ).OutNode = thisBeam->airOutNodeNum;
+						if ( thisBeam->beamHeatingPresent ) {
+							ZoneEquipConfig( CtrlZone ).AirDistUnitHeat( SupAirIn ).InNode = thisBeam->airInNodeNum;
+							ZoneEquipConfig( CtrlZone ).AirDistUnitHeat( SupAirIn ).OutNode =thisBeam->airOutNodeNum;
+						}
 						AirNodeFound = true;
 						break;
 					}
