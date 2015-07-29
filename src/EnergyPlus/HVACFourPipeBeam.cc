@@ -141,21 +141,15 @@ namespace HVACFourPipeBeam {
 		using namespace DataSizing;
 		using DataDefineEquip::AirDistUnit;
 		using DataDefineEquip::NumAirDistUnits;
-		using WaterCoils::GetCoilWaterInletNode;
+		using CurveManager::GetCurveIndex;
 		using namespace DataIPShortCuts;
+		using ScheduleManager::GetScheduleIndex;
 
-
-		static std::string const RoutineName( "GetFourPipeBeams " ); // include trailing blank space
+		static std::string const routineName( "GetFourPipeBeams " ); // include trailing blank space
 
 		int BeamIndex; // loop index
 		int BeamNum; // current beam number
-		std::string CurrentModuleObject; // for ease in getting objects
-		Array1D_string Alphas; // Alpha input items for object
-		Array1D_string cAlphaFields; // Alpha field names
-		Array1D_string cNumericFields; // Numeric field names
-		Array1D< Real64 > Numbers; // Numeric input items for object
-		Array1D_bool lAlphaBlanks; // Logical array, alpha field input BLANK = .TRUE.
-		Array1D_bool lNumericBlanks; // Logical array, numeric field input BLANK = .TRUE.
+		std::string currentModuleObject; // for ease in getting objects
 		static int NumAlphas( 0 ); // Number of Alphas for each GetObjectItem call
 		static int NumNumbers( 0 ); // Number of Numbers for each GetObjectItem call
 		static int TotalArgs( 0 ); // Total number of alpha and numeric arguments (max) for a
@@ -170,111 +164,133 @@ namespace HVACFourPipeBeam {
 		int ADUNum;
 
 		// find the number of cooled beam units
-		CurrentModuleObject = "AirTerminal:SingleDuct:ConstantVolume:FourPipeBeam";
-		NumFourPipeBeams = GetNumObjectsFound( CurrentModuleObject );
+		cCurrentModuleObject = "AirTerminal:SingleDuct:ConstantVolume:FourPipeBeam";
+		NumFourPipeBeams = GetNumObjectsFound( currentModuleObject );
 		// allocate the data structures
 		FourPipeBeam.allocate( NumFourPipeBeams );
 		CheckEquipName.dimension( NumFourPipeBeams, true );
 
 		NumAlphas = 16;
 		NumNumbers = 11;
-		TotalArgs = 27;
 
-		Alphas.allocate( NumAlphas );
-		cAlphaFields.allocate( NumAlphas );
-		cNumericFields.allocate( NumNumbers );
-		Numbers.dimension( NumNumbers, 0.0 );
-		lAlphaBlanks.dimension( NumAlphas, true );
-		lNumericBlanks.dimension( NumNumbers, true );
 
 		// loop over cooled beam units; get and load the input data
 		for ( BeamIndex = 1; BeamIndex <= NumFourPipeBeams; ++BeamIndex ) {
 
-			GetObjectItem( CurrentModuleObject, BeamIndex, Alphas, NumAlphas, Numbers, NumNumbers, IOStatus, lNumericBlanks, lAlphaBlanks, cAlphaFields, cNumericFields );
+			InputProcessor::GetObjectItem( cCurrentModuleObject, BeamIndex, cAlphaArgs, NumAlphas, rNumericArgs, NumNumbers, IOStatus, lNumericFieldBlanks, lAlphaFieldBlanks, cAlphaFieldNames, cNumericFieldNames );
 			BeamNum = BeamIndex;
-			IsNotOK = false;
-			IsBlank = false;
-			VerifyName( Alphas( 1 ), FourPipeBeam.Name(), CBNum - 1, IsNotOK, IsBlank, CurrentModuleObject + " Name" );
-			if ( IsNotOK ) {
+
+			GlobalNames::VerifyUniqueADUName( cCurrentModuleObject, cAlphaArgs( 1 ), errFlag, cCurrentModuleObject + " Name" );
+			if ( errFlag ) {
 				ErrorsFound = true;
-				if ( IsBlank ) Alphas( 1 ) = "xxxxx";
 			}
-			FourPipeBeam( BeamNum ).Name = Alphas( 1 );
-			FourPipeBeam( BeamNum ).UnitType = CurrentModuleObject;
+			thisBeam->name = cAlphaArgs( 1 );
+			thisBeam->unitType = cCurrentModuleObject;
 
-			if ( lAlphaBlanks( 2 ) ) {
-				FourPipeBeam( BeamNum ).AirAvailSchedNum = ScheduleAlwaysOn;
+			if ( lAlphaFieldBlanks( 2 ) ) {
+				thisBeam->airAvailSchedNum = ScheduleAlwaysOn;
 			} else {
-				FourPipeBeam( BeamNum ).AirAvailSchedNum = GetScheduleIndex( Alphas( 2 ) ); // convert schedule name to pointer
-				if ( FourPipeBeam( BeamNum ).AirAvailSchedNum  == 0 ) {
-					ShowSevereError( RoutineName + CurrentModuleObject + ": invalid " + cAlphaFields( 2 ) + " entered =" + Alphas( 2 ) + " for " + cAlphaFields( 1 ) + '=' + Alphas( 1 ) );
+				thisBeam->airAvailSchedNum = GetScheduleIndex( cAlphaArgs( 2 ) ); // convert schedule name to pointer
+				if ( thisBeam->airAvailSchedNum  == 0 ) {
+					ShowSevereError( routineName + cCurrentModuleObject + ": invalid " + cAlphaFields( 2 ) + " entered =" + cAlphaArgs( 2 ) + " for " + cAlphaFieldNames( 1 ) + '=' + cAlphaArgs( 1 ) );
 					ErrorsFound = true;
 				}
 			}
-			if ( lAlphaBlanks( 3 ) ) {
-				FourPipeBeam( BeamNum ).CoolingAvailSchedNum = ScheduleAlwaysOn;
+			if ( lAlphaFieldBlanks( 3 ) ) {
+				thisBeam->coolingAvailSchedNum = ScheduleAlwaysOn;
 			} else {
-				FourPipeBeam( BeamNum ).CoolingAvailSchedNum = GetScheduleIndex( Alphas( 3 ) ); // convert schedule name to pointer
-				if ( FourPipeBeam( BeamNum ).CoolingAvailSchedNum  == 0 ) {
-					ShowSevereError( RoutineName + CurrentModuleObject + ": invalid " + cAlphaFields( 3 ) + " entered =" + Alphas( 3 ) + " for " + cAlphaFields( 1 ) + '=' + Alphas( 1 ) );
+				thisBeam->coolingAvailSchedNum = GetScheduleIndex( cAlphaArgs( 3 ) ); // convert schedule name to index
+				if ( thisBeam->coolingAvailSchedNum  == 0 ) {
+					ShowSevereError( routineName + cCurrentModuleObject + ": invalid " + cAlphaFieldNames( 3 ) + " entered =" + cAlphaArgs( 3 ) + " for " + cAlphaFieldNames( 1 ) + '=' + cAlphaArgs( 1 ) );
 					ErrorsFound = true;
 				}
 			}
-			if ( lAlphaBlanks( 4 ) ) {
-				FourPipeBeam( BeamNum ).HeatingAvailSchedNum = ScheduleAlwaysOn;
+			if ( lAlphaFieldBlanks( 4 ) ) {
+				thisBeam->heatingAvailSchedNum = ScheduleAlwaysOn;
 			} else {
-				FourPipeBeam( BeamNum ).HeatingAvailSchedNum = GetScheduleIndex( Alphas( 4 ) ); // convert schedule name to pointer
-				if ( FourPipeBeam( BeamNum ).HeatingAvailSchedNum  == 0 ) {
-					ShowSevereError( RoutineName + CurrentModuleObject + ": invalid " + cAlphaFields( 4 ) + " entered =" + Alphas( 4 ) + " for " + cAlphaFields( 1 ) + '=' + Alphas( 1 ) );
+				thisBeam->heatingAvailSchedNum = GetScheduleIndex( cAlphaArgs( 4 ) ); // convert schedule name to index
+				if ( thisBeam->heatingAvailSchedNum  == 0 ) {
+					ShowSevereError( routineName + cCurrentModuleObject + ": invalid " + cAlphaFieldNames( 4 ) + " entered =" + cAlphaArgs( 4 ) + " for " + cAlphaFieldNames( 1 ) + '=' + cAlphaArgs( 1 ) );
 					ErrorsFound = true;
 				}
 			}
 
-			FourPipeBeam( BeamNum ).AirInNodeNum = GetOnlySingleNode( Alphas( 5 ), ErrorsFound, CurrentModuleObject, Alphas( 1 ), NodeType_Air, NodeConnectionType_Inlet, 1, ObjectIsNotParent, cAlphaFields( 5 ) );
-			FourPipeBeam( BeamNum ).AirOutNodeNum = GetOnlySingleNode( Alphas( 6 ), ErrorsFound, CurrentModuleObject, Alphas( 1 ), NodeType_Air, NodeConnectionType_Outlet, 1, ObjectIsNotParent, cAlphaFields( 6 ) );
-			if ( lAlphaBlanks( 7 ) && lAlphaBlanks( 8 ) ) {
-				FourPipeBeam( BeamNum ).BeamCoolingPresent = false;
+			thisBeam->airInNodeNum = GetOnlySingleNode( cAlphaArgs( 5 ), ErrorsFound, cCurrentModuleObject, cAlphaArgs( 1 ), NodeType_Air, NodeConnectionType_Inlet, 1, ObjectIsNotParent, cAlphaFieldNames( 5 ) );
+			thisBeam->airOutNodeNum = GetOnlySingleNode( cAlphaArgs( 6 ), ErrorsFound, cCurrentModuleObject, cAlphaArgs( 1 ), NodeType_Air, NodeConnectionType_Outlet, 1, ObjectIsNotParent, cAlphaFieldNames( 6 ) );
+			if ( lAlphaFieldBlanks( 7 ) && lAlphaFieldBlanks( 8 ) ) {
+				thisBeam->beamCoolingPresent = false;
 			} else {
-				FourPipeBeam( BeamNum ).BeamCoolingPresent = true;
-				FourPipeBeam( BeamNum ).CWInNodeNum = GetOnlySingleNode( Alphas( 7 ), ErrorsFound, CurrentModuleObject, Alphas( 1 ), NodeType_Water, NodeConnectionType_Inlet, 2, ObjectIsNotParent, cAlphaFields( 7 ) );
-				FourPipeBeam( BeamNum ).CWOutNodeNum = GetOnlySingleNode( Alphas( 8 ), ErrorsFound, CurrentModuleObject, Alphas( 1 ), NodeType_Water, NodeConnectionType_Outlet, 2, ObjectIsNotParent, cAlphaFields( 8 ) );
+				thisBeam->beamCoolingPresent = true;
+				thisBeam->cWInNodeNum = GetOnlySingleNode( cAlphaArgs( 7 ), ErrorsFound, cCurrentModuleObject, cAlphaArgs( 1 ), NodeType_Water, NodeConnectionType_Inlet, 2, ObjectIsNotParent, cAlphaFieldNames( 7 ) );
+				thisBeam->cWOutNodeNum = GetOnlySingleNode( cAlphaArgs( 8 ), ErrorsFound, cCurrentModuleObject, cAlphaArgs( 1 ), NodeType_Water, NodeConnectionType_Outlet, 2, ObjectIsNotParent, cAlphaFieldNames( 8 ) );
 			}
-			if ( lAlphaBlanks( 9 ) && lAlphaBlanks( 10 ) ) {
-				FourPipeBeam( BeamNum ).BeamHeatingPresent = false;
+			if ( lAlphaFieldBlanks( 9 ) && lAlphaFieldBlanks( 10 ) ) {
+				thisBeam->beamHeatingPresent = false;
 			} else {
-				FourPipeBeam( BeamNum ).BeamHeatingPresent = true;
-				FourPipeBeam( BeamNum ).HWInNodeNum = GetOnlySingleNode( Alphas( 9 ), ErrorsFound, CurrentModuleObject, Alphas( 1 ), NodeType_Water, NodeConnectionType_Inlet, 2, ObjectIsNotParent, cAlphaFields( 9 ) );
-				FourPipeBeam( BeamNum ).HWOutNodeNum = GetOnlySingleNode( Alphas( 10 ), ErrorsFound, CurrentModuleObject, Alphas( 1 ), NodeType_Water, NodeConnectionType_Outlet, 2, ObjectIsNotParent, cAlphaFields( 10 ) );
+				thisBeam->beamHeatingPresent = true;
+				thisBeam->hWInNodeNum = GetOnlySingleNode( cAlphaArgs( 9 ), ErrorsFound, cCurrentModuleObject, cAlphaArgs( 1 ), NodeType_Water, NodeConnectionType_Inlet, 2, ObjectIsNotParent, cAlphaFieldNames( 9 ) );
+				thisBeam->hWOutNodeNum = GetOnlySingleNode( cAlphaArgs( 10 ), ErrorsFound, cCurrentModuleObject, cAlphaArgs( 1 ), NodeType_Water, NodeConnectionType_Outlet, 2, ObjectIsNotParent, cAlphaFieldNames( 10 ) );
 			}
-			FourPipeBeam( BeamNum ).VdotDesignPrimAir = Numbers( 1 );
-			if ( FourPipeBeam( BeamNum ).VdotDesignPrimAir == AutoSize ) {
-				FourPipeBeam( BeamNum ).VdotDesignPrimAirWasAutosized = true;
+			thisBeam->vDotDesignPrimAir = rNumericArgs( 1 );
+			if ( thisBeam->vDotDesignPrimAir == AutoSize ) {
+				thisBeam->vDotDesignPrimAirWasAutosized = true;
 			}
-			FourPipeBeam( BeamNum ).VdotDesignCW = Numbers( 2 );
-			if ( FourPipeBeam( BeamNum ).VdotDesignCW == AutoSize ) {
-				FourPipeBeam( BeamNum ).VdotDesignCWWasAutosized = true;
+			thisBeam->vDotDesignCW = rNumericArgs( 2 );
+			if ( thisBeam->vDotDesignCW == AutoSize ) {
+				thisBeam->vDotDesignCWWasAutosized = true;
 			}
-			FourPipeBeam( BeamNum ).VdotDesignHW = Numbers( 3 );
-			if ( FourPipeBeam( BeamNum ).VdotDesignHW == AutoSize ) {
-				FourPipeBeam( BeamNum ).VdotDesignHWWasAutosized = true;
+			thisBeam->vDotDesignHW = rNumericArgs( 3 );
+			if ( thisBeam->vDotDesignHW == AutoSize ) {
+				thisBeam->vDotDesignHWWasAutosized = true;
 			}
-			FourPipeBeam( BeamNum ).TotBeamLength = Numbers( 4 );
-			if ( FourPipeBeam( BeamNum ).TotBeamLength ==  AutoSize ) {
-				FourPipeBeam( BeamNum ).TotBeamLengthWasAutosized = true;
+			thisBeam->totBeamLength = rNumericArgs( 4 );
+			if ( thisBeam->totBeamLength ==  AutoSize ) {
+				thisBeam->totBeamLengthWasAutosized = true;
 			}
-			CoolBeam( CBNum ).DesInletWaterTemp = Numbers( 5 );
-			CoolBeam( CBNum ).DesOutletWaterTemp = Numbers( 6 );
-			CoolBeam( CBNum ).CoilArea = Numbers( 7 );
-			CoolBeam( CBNum ).a = Numbers( 8 );
-			CoolBeam( CBNum ).n1 = Numbers( 9 );
-			CoolBeam( CBNum ).n2 = Numbers( 10 );
-			CoolBeam( CBNum ).n3 = Numbers( 11 );
-			CoolBeam( CBNum ).a0 = Numbers( 12 );
-			CoolBeam( CBNum ).K1 = Numbers( 13 );
-			CoolBeam( CBNum ).n = Numbers( 14 );
-			CoolBeam( CBNum ).Kin = Numbers( 15 );
-			CoolBeam( CBNum ).InDiam = Numbers( 16 );
+			thisBeam->vDotNormRatedPrimAir  = rNumericArgs( 5 );
+			thisBeam->qDotNormRatedCooling  = rNumericArgs( 6 );
+			thisBeam->deltaTempRatedCooling = rNumericArgs( 7 );
+			thisBeam->vDotNormRatedCW       = rNumericArgs( 8 );
 
+			thisBeam->modCoolingQdotDeltaTFuncNum = GetCurveIndex( cAlphaArgs( 11 ) )
+			if ( thisBeam->modCoolingQdotDeltaTFuncNum == 0 && thisBeam->beamCoolingPresent ) {
+				ShowSevereError( routineName + cCurrentModuleObject + "=\"" + cAlphaArgs( 1 ) + "\"" );
+				ShowContinueError( "Invalid " + cAlphaFieldNames( 11 ) + '=' + cAlphaArgs( 11 ) );
+				ErrorsFound = true;
+			}
+			thisBeam->modCoolingQdotAirFlowFuncNum = GetCurveIndex( cAlphaArgs( 12 ) )
+			if ( thisBeam->modCoolingQdotAirFlowFuncNum == 0 && thisBeam->beamCoolingPresent ) {
+				ShowSevereError( routineName + cCurrentModuleObject + "=\"" + cAlphaArgs( 1 ) + "\"" );
+				ShowContinueError( "Invalid " + cAlphaFieldNames( 12 ) + '=' + cAlphaArgs( 12 ) );
+				ErrorsFound = true;
+			}
+			thisBeam->modCoolingQdotCWFlowFuncNum = GetCurveIndex( cAlphaArgs( 13 ) )
+			if ( thisBeam->modCoolingQdotCWFlowFuncNum == 0 && thisBeam->beamCoolingPresent ) {
+				ShowSevereError( routineName + cCurrentModuleObject + "=\"" + cAlphaArgs( 1 ) + "\"" );
+				ShowContinueError( "Invalid " + cAlphaFieldNames( 13 ) + '=' + cAlphaArgs( 13 ) );
+				ErrorsFound = true;
+			}
+			thisBeam->qDotNormRatedHeating  = rNumericArgs( 9 );
+			thisBeam->deltaTempRatedHeating = rNumericArgs( 10 );
+			thisBeam->vDotNormRatedHW       = rNumericArgs( 11 );
+			thisBeam->modHeatingQdotDeltaTFuncNum = GetCurveIndex( cAlphaArgs( 14 ) )
+			if ( thisBeam->modHeatingQdotDeltaTFuncNum == 0 && thisBeam->beamHeatingPresent ) {
+				ShowSevereError( routineName + cCurrentModuleObject + "=\"" + cAlphaArgs( 1 ) + "\"" );
+				ShowContinueError( "Invalid " + cAlphaFieldNames( 14 ) + '=' + cAlphaArgs( 14 ) );
+				ErrorsFound = true;
+			}
+			thisBeam->modHeatingQdotAirFlowFuncNum = GetCurveIndex( cAlphaArgs( 15 ) )
+			if ( thisBeam->modHeatingQdotAirFlowFuncNum == 0 && thisBeam->beamHeatingPresent ) {
+				ShowSevereError( routineName + cCurrentModuleObject + "=\"" + cAlphaArgs( 1 ) + "\"" );
+				ShowContinueError( "Invalid " + cAlphaFieldNames( 15 ) + '=' + cAlphaArgs( 15 ) );
+				ErrorsFound = true;
+			}
+			thisBeam->modHeatingQdotHWFlowFuncNum = GetCurveIndex( cAlphaArgs( 16 ) )
+			if ( thisBeam->modHeatingQdotHWFlowFuncNum == 0 && thisBeam->beamHeatingPresent ) {
+				ShowSevereError( routineName + cCurrentModuleObject + "=\"" + cAlphaArgs( 1 ) + "\"" );
+				ShowContinueError( "Invalid " + cAlphaFieldNames( 16 ) + '=' + cAlphaArgs( 16 ) );
+				ErrorsFound = true;
+			}
 			// Register component set data
 			TestCompSet( CurrentModuleObject, CoolBeam( CBNum ).Name, NodeID( CoolBeam( CBNum ).AirInNode ), NodeID( CoolBeam( CBNum ).AirOutNode ), "Air Nodes" );
 			TestCompSet( CurrentModuleObject, CoolBeam( CBNum ).Name, NodeID( CoolBeam( CBNum ).CWInNode ), NodeID( CoolBeam( CBNum ).CWOutNode ), "Water Nodes" );

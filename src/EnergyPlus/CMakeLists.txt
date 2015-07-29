@@ -18,6 +18,7 @@ SET( SRC
   AirflowNetworkBalanceManager.hh
   AirflowNetworkSolver.cc
   AirflowNetworkSolver.hh
+  AirTerminalUnit.hh
   BaseboardElectric.cc
   BaseboardElectric.hh
   BaseboardRadiator.cc
@@ -374,6 +375,7 @@ SET( SRC_2
   PlantHeatExchangerFluidToFluid.hh
   PlantLoadProfile.cc
   PlantLoadProfile.hh
+  PlantLocation.hh
   PlantLoopEquip.cc
   PlantLoopEquip.hh
   PlantLoopSolver.cc
