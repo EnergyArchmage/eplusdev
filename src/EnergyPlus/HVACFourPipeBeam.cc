@@ -39,9 +39,7 @@ namespace FourPipeBeam {
 
 	Array1D< std::shared_ptr< HVACFourPipeBeam > > FourPipeBeams; // dimension to number of machines
 
-	HVACFourPipeBeam::FourPipeBeams(){}
-
-
+	HVACFourPipeBeam::HVACFourPipeBeam(){}
 
 	std::shared_ptr< AirTerminalUnit > 
 	HVACFourPipeBeam::FourPipeBeamFactory(
@@ -78,10 +76,10 @@ namespace FourPipeBeam {
 		bool errFlag = false;
 		static bool ErrorsFound( false ); // Set to true if errors in input, fatal at end of routine
 		bool found = false;
-		int CtrlZone; // controlled zome do loop index
-		int SupAirIn; // controlled zone supply air inlet index
-		bool AirNodeFound;
-		int ADUNum;
+		int ctrlZone; // controlled zome do loop index
+		int supAirIn; // controlled zone supply air inlet index
+		bool airNodeFound;
+		int aDUIndex;
 
 		std::shared_ptr< HVACFourPipeBeam > thisBeam( new HVACFourPipeBeam() );
 
@@ -256,163 +254,86 @@ namespace FourPipeBeam {
 			thisBeam->primAirFlow, "System", "Average", thisBeam->name );
 
 		// Fill the Zone Equipment data with the supply air inlet node number of this unit.
-		AirNodeFound = false;
-		for ( CtrlZone = 1; CtrlZone <= NumOfZones; ++CtrlZone ) {
-			if ( ! ZoneEquipConfig( CtrlZone ).IsControlled ) continue;
-			for ( SupAirIn = 1; SupAirIn <= ZoneEquipConfig( CtrlZone ).NumInletNodes; ++SupAirIn ) {
-				if ( thisBeam->airOutNodeNum == ZoneEquipConfig( CtrlZone ).InletNode( SupAirIn ) ) {
-					ZoneEquipConfig( CtrlZone ).AirDistUnitCool( SupAirIn ).InNode = thisBeam->airInNodeNum;
-					ZoneEquipConfig( CtrlZone ).AirDistUnitCool( SupAirIn ).OutNode = thisBeam->airOutNodeNum;
+		airNodeFound = false;
+		for ( ctrlZone = 1; ctrlZone <= NumOfZones; ++ctrlZone ) {
+			if ( ! ZoneEquipConfig( ctrlZone ).IsControlled ) continue;
+			for ( supAirIn = 1; supAirIn <= ZoneEquipConfig( ctrlZone ).NumInletNodes; ++supAirIn ) {
+				if ( thisBeam->airOutNodeNum == ZoneEquipConfig( ctrlZone ).InletNode( supAirIn ) ) {
+					ZoneEquipConfig( ctrlZone ).AirDistUnitCool( supAirIn ).InNode = thisBeam->airInNodeNum;
+					ZoneEquipConfig( ctrlZone ).AirDistUnitCool( supAirIn ).OutNode = thisBeam->airOutNodeNum;
 					if ( thisBeam->beamHeatingPresent ) {
-						ZoneEquipConfig( CtrlZone ).AirDistUnitHeat( SupAirIn ).InNode = thisBeam->airInNodeNum;
-						ZoneEquipConfig( CtrlZone ).AirDistUnitHeat( SupAirIn ).OutNode =thisBeam->airOutNodeNum;
+						ZoneEquipConfig( ctrlZone ).AirDistUnitHeat( supAirIn ).InNode = thisBeam->airInNodeNum;
+						ZoneEquipConfig( ctrlZone ).AirDistUnitHeat( supAirIn ).OutNode =thisBeam->airOutNodeNum;
 					}
-					AirNodeFound = true;
+					airNodeFound = true;
 					break;
 				}
 			}
 		}
-		if ( ! AirNodeFound ) {
+		if ( ! airNodeFound ) {
 			ShowSevereError( "The outlet air node from the " + cCurrentModuleObject + " = " + thisBeam->name );
 			ShowContinueError( "did not have a matching Zone Equipment Inlet Node, Node =" + cAlphaArgs( 5 ) );
 			ErrorsFound = true;
 		}
 
 
-			for ( ADUNum = 1; ADUNum <= NumAirDistUnits; ++ADUNum ) {
-				if ( NodeID( thisBeam->airOutNodeNum )  == AirDistUnit( ADUNum ).OutletNodeNum ) {
-					thisBeam->aDUNum = ADUNum;
-				}
+		for ( aDUIndex = 1; aDUIndex <= NumAirDistUnits; ++aDUIndex ) {
+			if ( thisBeam->airOutNodeNum == AirDistUnit( aDUIndex ).OutletNodeNum ) {
+				thisBeam->aDUNum = aDUIndex;
 			}
-			// one assumes if there isn't one assigned, it's an error?
-			if ( thisBeam->aDUNum == 0 ) {
-				ShowSevereError( routineName + "No matching Air Distribution Unit, for Unit = [" + cCurrentModuleObject + ',' + thisBeam->name + "]." );
-				ShowContinueError( "...should have outlet node=" + NodeID( thisBeam->airOutNodeNum ) );
-				//          ErrorsFound=.TRUE.
-			}
+		}
+		// assumes if there isn't one assigned, it's an error
+		if ( thisBeam->aDUNum == 0 ) {
+			ShowSevereError( routineName + "No matching Air Distribution Unit, for Unit = [" + cCurrentModuleObject + ',' + thisBeam->name + "]." );
+			ShowContinueError( "...should have outlet node=" + NodeID( thisBeam->airOutNodeNum ) );
+			//          ErrorsFound=.TRUE.
+		}
 
-
-		if ( ErrorsFound ) {
+		if ( found && !ErrorsFound ) {
+			FourPipeBeams.push_back( thisBeam );
+			return thisBeam;
+		} else { 
 			ShowFatalError( routineName + "Errors found in getting input. Preceding conditions cause termination." );
+			return nullptr;
 		}
 
 	}
 
 
-	using namespace DataPrecisionGlobals;
-	using namespace DataLoopNode;
-	using DataGlobals::BeginEnvrnFlag;
-	using DataGlobals::NumOfZones;
-	using DataGlobals::InitConvTemp;
-	using DataGlobals::SysSizingCalc;
 
-	using DataGlobals::SecInHour;
-	using DataGlobals::ScheduleAlwaysOn;
-	using DataEnvironment::StdBaroPress;
-	using DataEnvironment::StdRhoAir;
-	// Use statements for access to subroutines in other modules
-	using namespace ScheduleManager;
-	using Psychrometrics::PsyRhoAirFnPbTdbW;
-	using Psychrometrics::PsyCpAirFnWTdb;
-	using Psychrometrics::PsyHFnTdbW;
-	using DataHVACGlobals::SmallMassFlow;
-	using DataHVACGlobals::SmallLoad;
-	using DataHVACGlobals::SmallAirVolFlow;
-	using DataHVACGlobals::TimeStepSys;
-	using DataHVACGlobals::SmallWaterVolFlow;
-
-	Array1D_bool CheckEquipName;
-
-	int NumFourPipeBeams( 0 );
-
-	Array1D< FourPipeBeamData > FourPipeBeam;
 
 	void
-	SimFourPipeBeam(
-		std::string const & CompName, // name of the cooled beam unit
+	HVACFourPipeBeam::simulate(
 		bool const FirstHVACIteration, // TRUE if first HVAC iteration in time step
 		int const ZoneNum, // index of zone served by the unit
 		int const ZoneNodeNum, // zone node number of zone served by the unit
-		int & CompIndex, // which cooled beam unit in data structure
 		Real64 & NonAirSysOutput // convective cooling by the beam system [W]
 	)
 	{
 
-		using InputProcessor::FindItemInList;
-		using General::TrimSigDigits;
-
-		int BeamNum; // index of cooled beam unit being simulated
-		static bool GetInputFlag( true ); // First time, input is "gotten"
-
-		// First time SimIndUnit is called, get the input for all the cooled beam units
-		if ( GetInputFlag ) {
-			GetFourPipeBeams();
-			GetInputFlag = false;
-		}
-
-		// Get the  unit index
-		if ( CompIndex == 0 ) {
-			BeamNum = FindItemInList( CompName, FourPipeBeam.Name(), NumFourPipeBeams );
-			if ( BeamNum == 0 ) {
-				ShowFatalError( "SimFourPipeBeam: Four Pipe Beam Unit not found=" + CompName );
-			}
-			CompIndex = BeamNum;
-		} else {
-			BeamNum = CompIndex;
-			if ( BeamNum > NumFourPipeBeams || BeamNum < 1 ) {
-				ShowFatalError( "SimFourPipeBeam: Invalid CompIndex passed=" + TrimSigDigits( CompIndex ) + ", Number of Four Pipe Beam Units=" + TrimSigDigits( NumFourPipeBeams ) + ", air terminal name=" + CompName );
-			}
-			if ( CheckEquipName( BeamNum ) ) {
-				if ( CompName != FourPipeBeam( BeamNum ).Name ) {
-					ShowFatalError( "SimFourPipeBeam: Invalid CompIndex passed=" + TrimSigDigits( CompIndex ) + ", Four Pipe Beam Unit name=" + CompName + ", stored Four Pipe Beam Unit for that index=" + FourPipeBeam( BeamNum ).Name );
-				}
-				CheckEquipName( CBNum ) = false;
-			}
-		}
-		if ( BeamNum == 0 ) {
-			ShowFatalError( "Four Pipe Beam Unit not found = " + CompName );
-		}
-
 		// initialize the unit
-		InitFourPipeBeam( BeamNum, FirstHVACIteration );
+		this->init( FirstHVACIteration );
 
 		// control and simulate the beam
-		ControlFourPipeBeam( BeamNum, ZoneNum, ZoneNodeNum, FirstHVACIteration, NonAirSysOutput );
+		this->control(  ZoneNum, ZoneNodeNum, FirstHVACIteration, NonAirSysOutput );
 
 		// Update the current unit's outlet nodes. 
-		UpdateFourPipeBeam( BeamNum );
+		this->update();
 
 		// Fill the report variables. 
-		ReportFourPipeBeam( BeamNum );
+		this->report(  );
 
 	}
 
-	void
-	GetFourPipeBeams()
-	{
 
 
 	void
-	InitFourPipeBeam(
-		int const CBNum, // number of the current cooled beam unit being simulated
+	HVACFourPipeBeam::init(
+
 		bool const FirstHVACIteration // TRUE if first air loop solution this HVAC step
 	)
 	{
 
-		// SUBROUTINE INFORMATION:
-		//       AUTHOR         Fred Buhl
-		//       DATE WRITTEN   February 6, 2009
-		//       MODIFIED       na
-		//       RE-ENGINEERED  na
-
-		// PURPOSE OF THIS SUBROUTINE:
-		// This subroutine is for initialization of the cooled beam units
-
-		// METHODOLOGY EMPLOYED:
-		// Uses the status flags to trigger initializations.
-
-		// REFERENCES:
-		// na
 
 		// Using/Aliasing
 		using DataZoneEquipment::ZoneEquipInputsFilled;
@@ -426,19 +347,10 @@ namespace FourPipeBeam {
 		using PlantUtilities::InitComponentNodes;
 		using PlantUtilities::SetComponentFlowRate;
 
-		// Locals
-		// SUBROUTINE ARGUMENT DEFINITIONS:
 
-		// SUBROUTINE PARAMETER DEFINITIONS:
-		static std::string const RoutineName( "InitCoolBeam" );
+		static std::string const RoutineName( "HVACFourPipeBeam::init" );
 
-		// INTERFACE BLOCK SPECIFICATIONS:
-		// na
 
-		// DERIVED TYPE DEFINITIONS:
-		// na
-
-		// SUBROUTINE LOCAL VARIABLE DECLARATIONS:
 		int InAirNode; // supply air inlet node number
 		int OutAirNode; // unit air outlet node
 		int InWaterNode; // unit inlet chilled water node
