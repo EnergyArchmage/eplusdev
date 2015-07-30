@@ -6,6 +6,7 @@
 #include <ObjexxFCL/Fmath.hh>
 
 // EnergyPlus Headers
+#include <AirTerminalUnit.hh>
 #include <HVACFourPipeBeam.hh>
 #include <BranchNodeConnections.hh>
 #include <DataContaminantBalance.hh>
@@ -30,11 +31,272 @@
 #include <ReportSizingManager.hh>
 #include <ScheduleManager.hh>
 #include <UtilityRoutines.hh>
-#include <WaterCoils.hh>
+
 
 namespace EnergyPlus {
 
-namespace HVACFourPipeBeam {
+namespace FourPipeBeam {
+
+	Array1D< std::shared_ptr< HVACFourPipeBeam > > FourPipeBeams; // dimension to number of machines
+
+	HVACFourPipeBeam::FourPipeBeams(){}
+
+
+
+	std::shared_ptr< AirTerminalUnit > 
+	HVACFourPipeBeam::FourPipeBeamFactory(
+		int EP_UNUSED(objectType),
+		std::string objectName
+	){
+	
+		using InputProcessor::GetNumObjectsFound;
+		using InputProcessor::GetObjectItem;
+		using InputProcessor::VerifyName;
+		using InputProcessor::SameString;
+		using InputProcessor::GetObjectDefMaxArgs;
+		using NodeInputManager::GetOnlySingleNode;
+		using BranchNodeConnections::TestCompSet;
+		using BranchNodeConnections::SetUpCompSets;
+		using DataZoneEquipment::ZoneEquipConfig;
+		using namespace DataSizing;
+		using DataDefineEquip::AirDistUnit;
+		using DataDefineEquip::NumAirDistUnits;
+		using CurveManager::GetCurveIndex;
+		using namespace DataIPShortCuts;
+		using ScheduleManager::GetScheduleIndex;
+
+		static std::string const routineName( "FourPipeBeamFactory " ); // include trailing blank space
+
+		int beamIndex; // loop index
+
+
+		static int NumAlphas( 0 ); // Number of Alphas for each GetObjectItem call
+		static int NumNumbers( 0 ); // Number of Numbers for each GetObjectItem call
+
+		//  certain object in the input file
+		int IOStatus; // Used in GetObjectItem
+		bool errFlag = false;
+		static bool ErrorsFound( false ); // Set to true if errors in input, fatal at end of routine
+		bool found = false;
+		int CtrlZone; // controlled zome do loop index
+		int SupAirIn; // controlled zone supply air inlet index
+		bool AirNodeFound;
+		int ADUNum;
+
+		std::shared_ptr< HVACFourPipeBeam > thisBeam( new HVACFourPipeBeam() );
+
+		// find the number of cooled beam units
+		cCurrentModuleObject = "AirTerminal:SingleDuct:ConstantVolume:FourPipeBeam";
+		NumFourPipeBeams = GetNumObjectsFound( cCurrentModuleObject );
+		// allocate the data structures
+		FourPipeBeam.allocate( NumFourPipeBeams );
+		CheckEquipName.dimension( NumFourPipeBeams, true );
+
+		NumAlphas = 16;
+		NumNumbers = 11;
+
+
+		// find beam index from name
+		beamIndex = InputProcessor::GetObjectItemNum(cCurrentModuleObject, objectName );
+		if ( beamIndex > 0 ) {
+			InputProcessor::GetObjectItem( cCurrentModuleObject, beamIndex, cAlphaArgs, NumAlphas,
+				 rNumericArgs, NumNumbers, IOStatus, lNumericFieldBlanks, lAlphaFieldBlanks, cAlphaFieldNames, cNumericFieldNames );
+				found = true;
+		} else {
+			ErrorsFound = true;
+		}
+
+		GlobalNames::VerifyUniqueADUName( cCurrentModuleObject, cAlphaArgs( 1 ), errFlag, cCurrentModuleObject + " Name" );
+		if ( errFlag ) {
+			ErrorsFound = true;
+		}
+		thisBeam->name = cAlphaArgs( 1 );
+		thisBeam->unitType = cCurrentModuleObject;
+
+		if ( lAlphaFieldBlanks( 2 ) ) {
+			thisBeam->airAvailSchedNum = ScheduleAlwaysOn;
+		} else {
+			thisBeam->airAvailSchedNum = GetScheduleIndex( cAlphaArgs( 2 ) ); // convert schedule name to pointer
+			if ( thisBeam->airAvailSchedNum  == 0 ) {
+				ShowSevereError( routineName + cCurrentModuleObject + ": invalid " + cAlphaFields( 2 ) + " entered =" + cAlphaArgs( 2 ) + " for " + cAlphaFieldNames( 1 ) + '=' + cAlphaArgs( 1 ) );
+				ErrorsFound = true;
+			}
+		}
+		if ( lAlphaFieldBlanks( 3 ) ) {
+			thisBeam->coolingAvailSchedNum = ScheduleAlwaysOn;
+		} else {
+			thisBeam->coolingAvailSchedNum = GetScheduleIndex( cAlphaArgs( 3 ) ); // convert schedule name to index
+			if ( thisBeam->coolingAvailSchedNum  == 0 ) {
+				ShowSevereError( routineName + cCurrentModuleObject + ": invalid " + cAlphaFieldNames( 3 ) + " entered =" + cAlphaArgs( 3 ) + " for " + cAlphaFieldNames( 1 ) + '=' + cAlphaArgs( 1 ) );
+				ErrorsFound = true;
+			}
+		}
+		if ( lAlphaFieldBlanks( 4 ) ) {
+			thisBeam->heatingAvailSchedNum = ScheduleAlwaysOn;
+		} else {
+			thisBeam->heatingAvailSchedNum = GetScheduleIndex( cAlphaArgs( 4 ) ); // convert schedule name to index
+			if ( thisBeam->heatingAvailSchedNum  == 0 ) {
+				ShowSevereError( routineName + cCurrentModuleObject + ": invalid " + cAlphaFieldNames( 4 ) + " entered =" + cAlphaArgs( 4 ) + " for " + cAlphaFieldNames( 1 ) + '=' + cAlphaArgs( 1 ) );
+				ErrorsFound = true;
+			}
+		}
+
+		thisBeam->airInNodeNum = GetOnlySingleNode( cAlphaArgs( 5 ), ErrorsFound, cCurrentModuleObject, cAlphaArgs( 1 ), NodeType_Air, NodeConnectionType_Inlet, 1, ObjectIsNotParent, cAlphaFieldNames( 5 ) );
+		thisBeam->airOutNodeNum = GetOnlySingleNode( cAlphaArgs( 6 ), ErrorsFound, cCurrentModuleObject, cAlphaArgs( 1 ), NodeType_Air, NodeConnectionType_Outlet, 1, ObjectIsNotParent, cAlphaFieldNames( 6 ) );
+		if ( lAlphaFieldBlanks( 7 ) && lAlphaFieldBlanks( 8 ) ) {
+			thisBeam->beamCoolingPresent = false;
+		} else {
+			thisBeam->beamCoolingPresent = true;
+			thisBeam->cWInNodeNum = GetOnlySingleNode( cAlphaArgs( 7 ), ErrorsFound, cCurrentModuleObject, cAlphaArgs( 1 ), NodeType_Water, NodeConnectionType_Inlet, 2, ObjectIsNotParent, cAlphaFieldNames( 7 ) );
+			thisBeam->cWOutNodeNum = GetOnlySingleNode( cAlphaArgs( 8 ), ErrorsFound, cCurrentModuleObject, cAlphaArgs( 1 ), NodeType_Water, NodeConnectionType_Outlet, 2, ObjectIsNotParent, cAlphaFieldNames( 8 ) );
+		}
+		if ( lAlphaFieldBlanks( 9 ) && lAlphaFieldBlanks( 10 ) ) {
+			thisBeam->beamHeatingPresent = false;
+		} else {
+			thisBeam->beamHeatingPresent = true;
+			thisBeam->hWInNodeNum = GetOnlySingleNode( cAlphaArgs( 9 ), ErrorsFound, cCurrentModuleObject, cAlphaArgs( 1 ), NodeType_Water, NodeConnectionType_Inlet, 2, ObjectIsNotParent, cAlphaFieldNames( 9 ) );
+			thisBeam->hWOutNodeNum = GetOnlySingleNode( cAlphaArgs( 10 ), ErrorsFound, cCurrentModuleObject, cAlphaArgs( 1 ), NodeType_Water, NodeConnectionType_Outlet, 2, ObjectIsNotParent, cAlphaFieldNames( 10 ) );
+		}
+		thisBeam->vDotDesignPrimAir = rNumericArgs( 1 );
+		if ( thisBeam->vDotDesignPrimAir == AutoSize ) {
+			thisBeam->vDotDesignPrimAirWasAutosized = true;
+		}
+		thisBeam->vDotDesignCW = rNumericArgs( 2 );
+		if ( thisBeam->vDotDesignCW == AutoSize ) {
+			thisBeam->vDotDesignCWWasAutosized = true;
+		}
+		thisBeam->vDotDesignHW = rNumericArgs( 3 );
+		if ( thisBeam->vDotDesignHW == AutoSize ) {
+			thisBeam->vDotDesignHWWasAutosized = true;
+		}
+		thisBeam->totBeamLength = rNumericArgs( 4 );
+		if ( thisBeam->totBeamLength ==  AutoSize ) {
+			thisBeam->totBeamLengthWasAutosized = true;
+		}
+		thisBeam->vDotNormRatedPrimAir  = rNumericArgs( 5 );
+		thisBeam->qDotNormRatedCooling  = rNumericArgs( 6 );
+		thisBeam->deltaTempRatedCooling = rNumericArgs( 7 );
+		thisBeam->vDotNormRatedCW       = rNumericArgs( 8 );
+
+		thisBeam->modCoolingQdotDeltaTFuncNum = GetCurveIndex( cAlphaArgs( 11 ) );
+		if ( thisBeam->modCoolingQdotDeltaTFuncNum == 0 && thisBeam->beamCoolingPresent ) {
+			ShowSevereError( routineName + cCurrentModuleObject + "=\"" + cAlphaArgs( 1 ) + "\"" );
+			ShowContinueError( "Invalid " + cAlphaFieldNames( 11 ) + '=' + cAlphaArgs( 11 ) );
+			ErrorsFound = true;
+		}
+		thisBeam->modCoolingQdotAirFlowFuncNum = GetCurveIndex( cAlphaArgs( 12 ) );
+		if ( thisBeam->modCoolingQdotAirFlowFuncNum == 0 && thisBeam->beamCoolingPresent ) {
+			ShowSevereError( routineName + cCurrentModuleObject + "=\"" + cAlphaArgs( 1 ) + "\"" );
+			ShowContinueError( "Invalid " + cAlphaFieldNames( 12 ) + '=' + cAlphaArgs( 12 ) );
+			ErrorsFound = true;
+		}
+		thisBeam->modCoolingQdotCWFlowFuncNum = GetCurveIndex( cAlphaArgs( 13 ) );
+		if ( thisBeam->modCoolingQdotCWFlowFuncNum == 0 && thisBeam->beamCoolingPresent ) {
+			ShowSevereError( routineName + cCurrentModuleObject + "=\"" + cAlphaArgs( 1 ) + "\"" );
+			ShowContinueError( "Invalid " + cAlphaFieldNames( 13 ) + '=' + cAlphaArgs( 13 ) );
+			ErrorsFound = true;
+		}
+		thisBeam->qDotNormRatedHeating  = rNumericArgs( 9 );
+		thisBeam->deltaTempRatedHeating = rNumericArgs( 10 );
+		thisBeam->vDotNormRatedHW       = rNumericArgs( 11 );
+		thisBeam->modHeatingQdotDeltaTFuncNum = GetCurveIndex( cAlphaArgs( 14 ) );
+		if ( thisBeam->modHeatingQdotDeltaTFuncNum == 0 && thisBeam->beamHeatingPresent ) {
+			ShowSevereError( routineName + cCurrentModuleObject + "=\"" + cAlphaArgs( 1 ) + "\"" );
+			ShowContinueError( "Invalid " + cAlphaFieldNames( 14 ) + '=' + cAlphaArgs( 14 ) );
+			ErrorsFound = true;
+		}
+		thisBeam->modHeatingQdotAirFlowFuncNum = GetCurveIndex( cAlphaArgs( 15 ) );
+		if ( thisBeam->modHeatingQdotAirFlowFuncNum == 0 && thisBeam->beamHeatingPresent ) {
+			ShowSevereError( routineName + cCurrentModuleObject + "=\"" + cAlphaArgs( 1 ) + "\"" );
+			ShowContinueError( "Invalid " + cAlphaFieldNames( 15 ) + '=' + cAlphaArgs( 15 ) );
+			ErrorsFound = true;
+		}
+		thisBeam->modHeatingQdotHWFlowFuncNum = GetCurveIndex( cAlphaArgs( 16 ) );
+		if ( thisBeam->modHeatingQdotHWFlowFuncNum == 0 && thisBeam->beamHeatingPresent ) {
+			ShowSevereError( routineName + cCurrentModuleObject + "=\"" + cAlphaArgs( 1 ) + "\"" );
+			ShowContinueError( "Invalid " + cAlphaFieldNames( 16 ) + '=' + cAlphaArgs( 16 ) );
+			ErrorsFound = true;
+		}
+		// Register component set data
+		TestCompSet( cCurrentModuleObject, thisBeam->name, NodeID( thisBeam->airInNodeNum ), 
+						NodeID( thisBeam->airOutNodeNum ), "Air Nodes" );
+		if ( thisBeam->beamCoolingPresent ) {
+			TestCompSet( cCurrentModuleObject, thisBeam->name, NodeID( thisBeam->cWInNodeNum ),
+						NodeID( thisBeam->cWOutNodeNum ), "Water Nodes" );
+		}
+		if ( thisBeam->beamHeatingPresent ) {
+			TestCompSet( cCurrentModuleObject, thisBeam->name, NodeID( thisBeam->hWInNodeNum ),
+						NodeID( thisBeam->hWOutNodeNum ), "Water Nodes" );
+		}
+
+		//Setup the Cooled Beam reporting variables
+		if ( thisBeam->beamCoolingPresent ) {
+			SetupOutputVariable( "Zone Air Terminal Beam Sensible Cooling Energy [J]", 
+				thisBeam->beamCoolingEnergy, "System", "Sum", thisBeam->name, _, 
+				"ENERGYTRANSFER", "COOLINGCOILS", "Four Pipe Beam", "System" );
+			SetupOutputVariable( "Zone Air Terminal Beam Sensible Cooling Rate [W]", 
+				thisBeam->beamCoolingRate, "System", "Average", thisBeam->name );
+		}
+		if ( thisBeam->beamHeatingPresent ) {
+			SetupOutputVariable( "Zone Air Terminal Beam Sensible Heating Energy [J]", 
+				thisBeam->beamHeatingEnergy, "System", "Sum", thisBeam->name, _, 
+				"ENERGYTRANSFER", "HEATINGCOILS", "Four Pipe Beam", "System" );
+			SetupOutputVariable( "Zone Air Terminal Beam Sensible Heating Rate [W]", 
+				thisBeam->beamHeatingRate, "System", "Average", thisBeam->name );
+		}
+		SetupOutputVariable( "Zone Air Terminal Primary Air Sensible Cooling Energy [J]", 
+			thisBeam->supAirCoolingEnergy, "System", "Sum", thisBeam->name );
+		SetupOutputVariable( "Zone Air Terminal Primary Air Sensible Cooling Rate [W]", 
+			thisBeam->supAirCoolingRate, "System", "Average", thisBeam->name );
+		SetupOutputVariable( "Zone Air Terminal Primary Air Sensible Heating Energy [J]", 
+			thisBeam->supAirHeatingEnergy, "System", "Sum", thisBeam->name );
+		SetupOutputVariable( "Zone Air Terminal Primary Air Sensible Heating Rate [W]", 
+			thisBeam->supAirHeatingRate, "System", "Average", thisBeam->name );
+		SetupOutputVariable( "Zone Air Terminal Primary Air Flow Rate [m3/s]", 
+			thisBeam->primAirFlow, "System", "Average", thisBeam->name );
+
+		// Fill the Zone Equipment data with the supply air inlet node number of this unit.
+		AirNodeFound = false;
+		for ( CtrlZone = 1; CtrlZone <= NumOfZones; ++CtrlZone ) {
+			if ( ! ZoneEquipConfig( CtrlZone ).IsControlled ) continue;
+			for ( SupAirIn = 1; SupAirIn <= ZoneEquipConfig( CtrlZone ).NumInletNodes; ++SupAirIn ) {
+				if ( thisBeam->airOutNodeNum == ZoneEquipConfig( CtrlZone ).InletNode( SupAirIn ) ) {
+					ZoneEquipConfig( CtrlZone ).AirDistUnitCool( SupAirIn ).InNode = thisBeam->airInNodeNum;
+					ZoneEquipConfig( CtrlZone ).AirDistUnitCool( SupAirIn ).OutNode = thisBeam->airOutNodeNum;
+					if ( thisBeam->beamHeatingPresent ) {
+						ZoneEquipConfig( CtrlZone ).AirDistUnitHeat( SupAirIn ).InNode = thisBeam->airInNodeNum;
+						ZoneEquipConfig( CtrlZone ).AirDistUnitHeat( SupAirIn ).OutNode =thisBeam->airOutNodeNum;
+					}
+					AirNodeFound = true;
+					break;
+				}
+			}
+		}
+		if ( ! AirNodeFound ) {
+			ShowSevereError( "The outlet air node from the " + cCurrentModuleObject + " = " + thisBeam->name );
+			ShowContinueError( "did not have a matching Zone Equipment Inlet Node, Node =" + cAlphaArgs( 5 ) );
+			ErrorsFound = true;
+		}
+
+
+			for ( ADUNum = 1; ADUNum <= NumAirDistUnits; ++ADUNum ) {
+				if ( NodeID( thisBeam->airOutNodeNum )  == AirDistUnit( ADUNum ).OutletNodeNum ) {
+					thisBeam->aDUNum = ADUNum;
+				}
+			}
+			// one assumes if there isn't one assigned, it's an error?
+			if ( thisBeam->aDUNum == 0 ) {
+				ShowSevereError( routineName + "No matching Air Distribution Unit, for Unit = [" + cCurrentModuleObject + ',' + thisBeam->name + "]." );
+				ShowContinueError( "...should have outlet node=" + NodeID( thisBeam->airOutNodeNum ) );
+				//          ErrorsFound=.TRUE.
+			}
+
+
+		if ( ErrorsFound ) {
+			ShowFatalError( routineName + "Errors found in getting input. Preceding conditions cause termination." );
+		}
+
+	}
 
 
 	using namespace DataPrecisionGlobals;
@@ -43,7 +305,7 @@ namespace HVACFourPipeBeam {
 	using DataGlobals::NumOfZones;
 	using DataGlobals::InitConvTemp;
 	using DataGlobals::SysSizingCalc;
-	using DataGlobals::Pi;
+
 	using DataGlobals::SecInHour;
 	using DataGlobals::ScheduleAlwaysOn;
 	using DataEnvironment::StdBaroPress;
@@ -129,257 +391,6 @@ namespace HVACFourPipeBeam {
 	GetFourPipeBeams()
 	{
 
-		using InputProcessor::GetNumObjectsFound;
-		using InputProcessor::GetObjectItem;
-		using InputProcessor::VerifyName;
-		using InputProcessor::SameString;
-		using InputProcessor::GetObjectDefMaxArgs;
-		using NodeInputManager::GetOnlySingleNode;
-		using BranchNodeConnections::TestCompSet;
-		using BranchNodeConnections::SetUpCompSets;
-		using DataZoneEquipment::ZoneEquipConfig;
-		using namespace DataSizing;
-		using DataDefineEquip::AirDistUnit;
-		using DataDefineEquip::NumAirDistUnits;
-		using CurveManager::GetCurveIndex;
-		using namespace DataIPShortCuts;
-		using ScheduleManager::GetScheduleIndex;
-
-		static std::string const routineName( "GetFourPipeBeams " ); // include trailing blank space
-
-		int BeamIndex; // loop index
-		int BeamNum; // current beam number
-		std::string currentModuleObject; // for ease in getting objects
-		static int NumAlphas( 0 ); // Number of Alphas for each GetObjectItem call
-		static int NumNumbers( 0 ); // Number of Numbers for each GetObjectItem call
-		static int TotalArgs( 0 ); // Total number of alpha and numeric arguments (max) for a
-		//  certain object in the input file
-		int IOStatus; // Used in GetObjectItem
-		static bool ErrorsFound( false ); // Set to true if errors in input, fatal at end of routine
-		bool IsNotOK; // Flag to verify name
-		bool IsBlank; // Flag for blank name
-		int CtrlZone; // controlled zome do loop index
-		int SupAirIn; // controlled zone supply air inlet index
-		bool AirNodeFound;
-		int ADUNum;
-
-		// find the number of cooled beam units
-		cCurrentModuleObject = "AirTerminal:SingleDuct:ConstantVolume:FourPipeBeam";
-		NumFourPipeBeams = GetNumObjectsFound( currentModuleObject );
-		// allocate the data structures
-		FourPipeBeam.allocate( NumFourPipeBeams );
-		CheckEquipName.dimension( NumFourPipeBeams, true );
-
-		NumAlphas = 16;
-		NumNumbers = 11;
-
-
-		// loop over cooled beam units; get and load the input data
-		for ( BeamIndex = 1; BeamIndex <= NumFourPipeBeams; ++BeamIndex ) {
-
-			InputProcessor::GetObjectItem( cCurrentModuleObject, BeamIndex, cAlphaArgs, NumAlphas, rNumericArgs, NumNumbers, IOStatus, lNumericFieldBlanks, lAlphaFieldBlanks, cAlphaFieldNames, cNumericFieldNames );
-			BeamNum = BeamIndex;
-
-			GlobalNames::VerifyUniqueADUName( cCurrentModuleObject, cAlphaArgs( 1 ), errFlag, cCurrentModuleObject + " Name" );
-			if ( errFlag ) {
-				ErrorsFound = true;
-			}
-			thisBeam->name = cAlphaArgs( 1 );
-			thisBeam->unitType = cCurrentModuleObject;
-
-			if ( lAlphaFieldBlanks( 2 ) ) {
-				thisBeam->airAvailSchedNum = ScheduleAlwaysOn;
-			} else {
-				thisBeam->airAvailSchedNum = GetScheduleIndex( cAlphaArgs( 2 ) ); // convert schedule name to pointer
-				if ( thisBeam->airAvailSchedNum  == 0 ) {
-					ShowSevereError( routineName + cCurrentModuleObject + ": invalid " + cAlphaFields( 2 ) + " entered =" + cAlphaArgs( 2 ) + " for " + cAlphaFieldNames( 1 ) + '=' + cAlphaArgs( 1 ) );
-					ErrorsFound = true;
-				}
-			}
-			if ( lAlphaFieldBlanks( 3 ) ) {
-				thisBeam->coolingAvailSchedNum = ScheduleAlwaysOn;
-			} else {
-				thisBeam->coolingAvailSchedNum = GetScheduleIndex( cAlphaArgs( 3 ) ); // convert schedule name to index
-				if ( thisBeam->coolingAvailSchedNum  == 0 ) {
-					ShowSevereError( routineName + cCurrentModuleObject + ": invalid " + cAlphaFieldNames( 3 ) + " entered =" + cAlphaArgs( 3 ) + " for " + cAlphaFieldNames( 1 ) + '=' + cAlphaArgs( 1 ) );
-					ErrorsFound = true;
-				}
-			}
-			if ( lAlphaFieldBlanks( 4 ) ) {
-				thisBeam->heatingAvailSchedNum = ScheduleAlwaysOn;
-			} else {
-				thisBeam->heatingAvailSchedNum = GetScheduleIndex( cAlphaArgs( 4 ) ); // convert schedule name to index
-				if ( thisBeam->heatingAvailSchedNum  == 0 ) {
-					ShowSevereError( routineName + cCurrentModuleObject + ": invalid " + cAlphaFieldNames( 4 ) + " entered =" + cAlphaArgs( 4 ) + " for " + cAlphaFieldNames( 1 ) + '=' + cAlphaArgs( 1 ) );
-					ErrorsFound = true;
-				}
-			}
-
-			thisBeam->airInNodeNum = GetOnlySingleNode( cAlphaArgs( 5 ), ErrorsFound, cCurrentModuleObject, cAlphaArgs( 1 ), NodeType_Air, NodeConnectionType_Inlet, 1, ObjectIsNotParent, cAlphaFieldNames( 5 ) );
-			thisBeam->airOutNodeNum = GetOnlySingleNode( cAlphaArgs( 6 ), ErrorsFound, cCurrentModuleObject, cAlphaArgs( 1 ), NodeType_Air, NodeConnectionType_Outlet, 1, ObjectIsNotParent, cAlphaFieldNames( 6 ) );
-			if ( lAlphaFieldBlanks( 7 ) && lAlphaFieldBlanks( 8 ) ) {
-				thisBeam->beamCoolingPresent = false;
-			} else {
-				thisBeam->beamCoolingPresent = true;
-				thisBeam->cWInNodeNum = GetOnlySingleNode( cAlphaArgs( 7 ), ErrorsFound, cCurrentModuleObject, cAlphaArgs( 1 ), NodeType_Water, NodeConnectionType_Inlet, 2, ObjectIsNotParent, cAlphaFieldNames( 7 ) );
-				thisBeam->cWOutNodeNum = GetOnlySingleNode( cAlphaArgs( 8 ), ErrorsFound, cCurrentModuleObject, cAlphaArgs( 1 ), NodeType_Water, NodeConnectionType_Outlet, 2, ObjectIsNotParent, cAlphaFieldNames( 8 ) );
-			}
-			if ( lAlphaFieldBlanks( 9 ) && lAlphaFieldBlanks( 10 ) ) {
-				thisBeam->beamHeatingPresent = false;
-			} else {
-				thisBeam->beamHeatingPresent = true;
-				thisBeam->hWInNodeNum = GetOnlySingleNode( cAlphaArgs( 9 ), ErrorsFound, cCurrentModuleObject, cAlphaArgs( 1 ), NodeType_Water, NodeConnectionType_Inlet, 2, ObjectIsNotParent, cAlphaFieldNames( 9 ) );
-				thisBeam->hWOutNodeNum = GetOnlySingleNode( cAlphaArgs( 10 ), ErrorsFound, cCurrentModuleObject, cAlphaArgs( 1 ), NodeType_Water, NodeConnectionType_Outlet, 2, ObjectIsNotParent, cAlphaFieldNames( 10 ) );
-			}
-			thisBeam->vDotDesignPrimAir = rNumericArgs( 1 );
-			if ( thisBeam->vDotDesignPrimAir == AutoSize ) {
-				thisBeam->vDotDesignPrimAirWasAutosized = true;
-			}
-			thisBeam->vDotDesignCW = rNumericArgs( 2 );
-			if ( thisBeam->vDotDesignCW == AutoSize ) {
-				thisBeam->vDotDesignCWWasAutosized = true;
-			}
-			thisBeam->vDotDesignHW = rNumericArgs( 3 );
-			if ( thisBeam->vDotDesignHW == AutoSize ) {
-				thisBeam->vDotDesignHWWasAutosized = true;
-			}
-			thisBeam->totBeamLength = rNumericArgs( 4 );
-			if ( thisBeam->totBeamLength ==  AutoSize ) {
-				thisBeam->totBeamLengthWasAutosized = true;
-			}
-			thisBeam->vDotNormRatedPrimAir  = rNumericArgs( 5 );
-			thisBeam->qDotNormRatedCooling  = rNumericArgs( 6 );
-			thisBeam->deltaTempRatedCooling = rNumericArgs( 7 );
-			thisBeam->vDotNormRatedCW       = rNumericArgs( 8 );
-
-			thisBeam->modCoolingQdotDeltaTFuncNum = GetCurveIndex( cAlphaArgs( 11 ) )
-			if ( thisBeam->modCoolingQdotDeltaTFuncNum == 0 && thisBeam->beamCoolingPresent ) {
-				ShowSevereError( routineName + cCurrentModuleObject + "=\"" + cAlphaArgs( 1 ) + "\"" );
-				ShowContinueError( "Invalid " + cAlphaFieldNames( 11 ) + '=' + cAlphaArgs( 11 ) );
-				ErrorsFound = true;
-			}
-			thisBeam->modCoolingQdotAirFlowFuncNum = GetCurveIndex( cAlphaArgs( 12 ) )
-			if ( thisBeam->modCoolingQdotAirFlowFuncNum == 0 && thisBeam->beamCoolingPresent ) {
-				ShowSevereError( routineName + cCurrentModuleObject + "=\"" + cAlphaArgs( 1 ) + "\"" );
-				ShowContinueError( "Invalid " + cAlphaFieldNames( 12 ) + '=' + cAlphaArgs( 12 ) );
-				ErrorsFound = true;
-			}
-			thisBeam->modCoolingQdotCWFlowFuncNum = GetCurveIndex( cAlphaArgs( 13 ) )
-			if ( thisBeam->modCoolingQdotCWFlowFuncNum == 0 && thisBeam->beamCoolingPresent ) {
-				ShowSevereError( routineName + cCurrentModuleObject + "=\"" + cAlphaArgs( 1 ) + "\"" );
-				ShowContinueError( "Invalid " + cAlphaFieldNames( 13 ) + '=' + cAlphaArgs( 13 ) );
-				ErrorsFound = true;
-			}
-			thisBeam->qDotNormRatedHeating  = rNumericArgs( 9 );
-			thisBeam->deltaTempRatedHeating = rNumericArgs( 10 );
-			thisBeam->vDotNormRatedHW       = rNumericArgs( 11 );
-			thisBeam->modHeatingQdotDeltaTFuncNum = GetCurveIndex( cAlphaArgs( 14 ) )
-			if ( thisBeam->modHeatingQdotDeltaTFuncNum == 0 && thisBeam->beamHeatingPresent ) {
-				ShowSevereError( routineName + cCurrentModuleObject + "=\"" + cAlphaArgs( 1 ) + "\"" );
-				ShowContinueError( "Invalid " + cAlphaFieldNames( 14 ) + '=' + cAlphaArgs( 14 ) );
-				ErrorsFound = true;
-			}
-			thisBeam->modHeatingQdotAirFlowFuncNum = GetCurveIndex( cAlphaArgs( 15 ) )
-			if ( thisBeam->modHeatingQdotAirFlowFuncNum == 0 && thisBeam->beamHeatingPresent ) {
-				ShowSevereError( routineName + cCurrentModuleObject + "=\"" + cAlphaArgs( 1 ) + "\"" );
-				ShowContinueError( "Invalid " + cAlphaFieldNames( 15 ) + '=' + cAlphaArgs( 15 ) );
-				ErrorsFound = true;
-			}
-			thisBeam->modHeatingQdotHWFlowFuncNum = GetCurveIndex( cAlphaArgs( 16 ) )
-			if ( thisBeam->modHeatingQdotHWFlowFuncNum == 0 && thisBeam->beamHeatingPresent ) {
-				ShowSevereError( routineName + cCurrentModuleObject + "=\"" + cAlphaArgs( 1 ) + "\"" );
-				ShowContinueError( "Invalid " + cAlphaFieldNames( 16 ) + '=' + cAlphaArgs( 16 ) );
-				ErrorsFound = true;
-			}
-			// Register component set data
-			TestCompSet( cCurrentModuleObject, thisBeam->name, NodeID( thisBeam->airInNodeNum ), 
-							NodeID( thisBeam->airOutNodeNum ), "Air Nodes" );
-			if ( thisBeam->beamCoolingPresent ) {
-				TestCompSet( cCurrentModuleObject, thisBeam->name, NodeID( thisBeam->cWInNodeNum ),
-							NodeID( thisBeam->cWOutNodeNum ), "Water Nodes" );
-			}
-			if ( thisBeam->beamHeatingPresent ) {
-				TestCompSet( cCurrentModuleObject, thisBeam->name, NodeID( thisBeam->hWInNodeNum ),
-							NodeID( thisBeam->hWOutNodeNum ), "Water Nodes" );
-			}
-
-			//Setup the Cooled Beam reporting variables
-			if ( thisBeam->beamCoolingPresent ) {
-				SetupOutputVariable( "Zone Air Terminal Beam Sensible Cooling Energy [J]", 
-					thisBeam->beamCoolingEnergy, "System", "Sum", thisBeam->name, _, 
-					"ENERGYTRANSFER", "COOLINGCOILS", "Four Pipe Beam", "System" );
-				SetupOutputVariable( "Zone Air Terminal Beam Sensible Cooling Rate [W]", 
-					thisBeam->beamCoolingRate, "System", "Average", thisBeam->name );
-			}
-			if ( thisBeam->beamHeatingPresent ) {
-				SetupOutputVariable( "Zone Air Terminal Beam Sensible Heating Energy [J]", 
-					thisBeam->beamHeatingEnergy, "System", "Sum", thisBeam->name, _, 
-					"ENERGYTRANSFER", "HEATINGCOILS", "Four Pipe Beam", "System" );
-				SetupOutputVariable( "Zone Air Terminal Beam Sensible Heating Rate [W]", 
-					thisBeam->beamHeatingRate, "System", "Average", thisBeam->name );
-			}
-			SetupOutputVariable( "Zone Air Terminal Primary Air Sensible Cooling Energy [J]", 
-				thisBeam->supAirCoolingEnergy, "System", "Sum", thisBeam->name );
-			SetupOutputVariable( "Zone Air Terminal Primary Air Sensible Cooling Rate [W]", 
-				thisBeam->supAirCoolingRate, "System", "Average", thisBeam->name );
-			SetupOutputVariable( "Zone Air Terminal Primary Air Sensible Heating Energy [J]", 
-				thisBeam->supAirHeatingEnergy, "System", "Sum", thisBeam->name );
-			SetupOutputVariable( "Zone Air Terminal Primary Air Sensible Heating Rate [W]", 
-				thisBeam->supAirHeatingRate, "System", "Average", thisBeam->name );
-			SetupOutputVariable( "Zone Air Terminal Primary Air Flow Rate [m3/s]", 
-				thisBeam->primAirFlow, "System", "Average", thisBeam->name );
-
-			// Fill the Zone Equipment data with the supply air inlet node number of this unit.
-			AirNodeFound = false;
-			for ( CtrlZone = 1; CtrlZone <= NumOfZones; ++CtrlZone ) {
-				if ( ! ZoneEquipConfig( CtrlZone ).IsControlled ) continue;
-				for ( SupAirIn = 1; SupAirIn <= ZoneEquipConfig( CtrlZone ).NumInletNodes; ++SupAirIn ) {
-					if ( thisBeam->airOutNodeNum == ZoneEquipConfig( CtrlZone ).InletNode( SupAirIn ) ) {
-						ZoneEquipConfig( CtrlZone ).AirDistUnitCool( SupAirIn ).InNode = thisBeam->airInNodeNum;
-						ZoneEquipConfig( CtrlZone ).AirDistUnitCool( SupAirIn ).OutNode = thisBeam->airOutNodeNum;
-						if ( thisBeam->beamHeatingPresent ) {
-							ZoneEquipConfig( CtrlZone ).AirDistUnitHeat( SupAirIn ).InNode = thisBeam->airInNodeNum;
-							ZoneEquipConfig( CtrlZone ).AirDistUnitHeat( SupAirIn ).OutNode =thisBeam->airOutNodeNum;
-						}
-						AirNodeFound = true;
-						break;
-					}
-				}
-			}
-			if ( ! AirNodeFound ) {
-				ShowSevereError( "The outlet air node from the " + CurrentModuleObject + " = " + CoolBeam( CBNum ).Name );
-				ShowContinueError( "did not have a matching Zone Equipment Inlet Node, Node =" + Alphas( 5 ) );
-				ErrorsFound = true;
-			}
-
-		}
-
-		for ( CBNum = 1; CBNum <= NumCB; ++CBNum ) {
-			for ( ADUNum = 1; ADUNum <= NumAirDistUnits; ++ADUNum ) {
-				if ( CoolBeam( CBNum ).AirOutNode == AirDistUnit( ADUNum ).OutletNodeNum ) {
-					CoolBeam( CBNum ).ADUNum = ADUNum;
-				}
-			}
-			// one assumes if there isn't one assigned, it's an error?
-			if ( CoolBeam( CBNum ).ADUNum == 0 ) {
-				ShowSevereError( RoutineName + "No matching Air Distribution Unit, for Unit = [" + CurrentModuleObject + ',' + CoolBeam( CBNum ).Name + "]." );
-				ShowContinueError( "...should have outlet node=" + NodeID( CoolBeam( CBNum ).AirOutNode ) );
-				//          ErrorsFound=.TRUE.
-			}
-		}
-
-		Alphas.deallocate();
-		cAlphaFields.deallocate();
-		cNumericFields.deallocate();
-		Numbers.deallocate();
-		lAlphaBlanks.deallocate();
-		lNumericBlanks.deallocate();
-
-		if ( ErrorsFound ) {
-			ShowFatalError( RoutineName + "Errors found in getting input. Preceding conditions cause termination." );
-		}
-
-	}
 
 	void
 	InitFourPipeBeam(

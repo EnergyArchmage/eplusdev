@@ -79,8 +79,9 @@ public: // Methods		REMOVE ANY OF THESE THAT AREN'T COMMON (WITH SAME ARGS) TO A
 
 	virtual
 	void
-	get() const = 0;
+	get_input() const = 0;
 
+	virtual
 	void
 	init(
 		bool const FirstHVACIteration // TRUE if first air loop solution this HVAC step         MAYBE THIS SHOULD HAVE A DEFAULT ARG OF = false
@@ -89,34 +90,6 @@ public: // Methods		REMOVE ANY OF THESE THAT AREN'T COMMON (WITH SAME ARGS) TO A
 	virtual
 	void
 	set_size() = 0;
-
-	virtual
-	void
-	control(
-		int const ZoneNum, // number of zone being served
-		int const ZoneNodeNum, // zone node number
-		bool const FirstHVACIteration, // TRUE if 1st HVAC simulation of system timestep
-		Real64 & NonAirSysOutput // convective cooling by the beam system [W]
-	) = 0;
-
-	virtual
-	void
-	calc(
-		int const ZoneNode, // zone node number
-		Real64 const CWFlow, // chilled water flow [kg/s]
-		Real64 const HWFlow, // hot water flow [kg/s]
-		Real64 & LoadMet, // load met by unit [W]
-		Real64 & CWTempOut // chilled water outlet temperature [C]
-		Real64 & HWTempOut, // hot water outlet temperature [C]
-	) = 0;
-
-	virtual
-	Real64
-	residual(
-		Real64 const cWaterFlow, // chilled water flow rate in kg/s
-		Real64 const hWaterFlow,
-		Array1< Real64 > const & Par
-	) = 0;
 
 	virtual
 	void
@@ -139,7 +112,7 @@ public: // Methods		REMOVE ANY OF THESE THAT AREN'T COMMON (WITH SAME ARGS) TO A
 
 public: // Data
 
-	AirTerminalUnitType terminalType( notYetDetermined ); // Type of air distribution unit  //Legacy For use during transition to OO
+	AirTerminalUnitType terminalType; // Type of air distribution unit  //Legacy For use during transition to OO
 	std::string name; // name of unit
 	std::string unitType; // type of unit = AirTerminal:SingleDuct:ConstantVolume:FourPipeBeam
 	int aDUNum; // index of this unit in the corresponding air distribution unit structure

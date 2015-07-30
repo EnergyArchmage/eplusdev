@@ -1,18 +1,20 @@
 #ifndef HVACFourPipeBeam_hh_INCLUDED
 #define HVACFourPipeBeam_hh_INCLUDED
 
+#include <memory>
 // ObjexxFCL Headers
 #include <ObjexxFCL/Array1.hh>
 
 // EnergyPlus Headers
 #include <AirTerminalUnit.hh>
-#include <AirDistUnitBase.hh>
 #include <EnergyPlus.hh>
 #include <DataGlobals.hh>
 #include <GlobalNames.hh>
 #include <PlantLocation.hh> // this is from https://github.com/NREL/EnergyPlus/pull/4945  assuming it goes in other wise maybe the same from using DataPlant
 
 namespace EnergyPlus {
+
+namespace FourPipeBeam {
 
 class HVACFourPipeBeam : public AirTerminalUnit
 {
@@ -45,6 +47,7 @@ public: // Creation
 		cWTempOut( 0.0 ),
 		cWInNodeNum( 0 ),
 		cWOutNodeNum( 0 ),
+		cWLocation( PlantLocation( 0, 0, 0, 0 ) ),
 		beamHeatingPresent( false ),
 		vDotDesignHW( 0.0 ),
 		vDotDesignHWWasAutosized( false ),
@@ -61,11 +64,12 @@ public: // Creation
 		hWTempOut( 0.0 ),
 		hWInNodeNum( 0 ),
 		hWOutNodeNum( 0 ),
-		beamLoadReSimIndex( 0;
-		beamCWMassFlowReSimIndex( 0;
-		beamCWOutletTempReSimIndex( 0;
-		beamHWMassFlowReSimIndex( 0;
-		beamHWOutletTempReSimIndex( 0;
+		hWLocation( PlantLocation( 0, 0, 0, 0 ) ),
+		beamLoadReSimIndex( 0 ),
+		beamCWMassFlowReSimIndex( 0 ),
+		beamCWOutletTempReSimIndex( 0 ),
+		beamHWMassFlowReSimIndex( 0 ),
+		beamHWOutletTempReSimIndex( 0 ),
 		beamCoolingEnergy( 0.0 ),
 		beamCoolingRate( 0.0 ),
 		beamHeatingEnergy( 0.0 ),
@@ -84,8 +88,11 @@ public: // Creation
 
 public: // Methods		MARK ANY THAT DON'T ALTER STATE const !!!
 
-	void
-	get() const;
+	static std::shared_ptr< AirTerminalUnit >
+	FourPipeBeamFactory(
+		int objectType,
+		std::string objectName
+	);
 
 	void
 	init(
@@ -109,7 +116,7 @@ public: // Methods		MARK ANY THAT DON'T ALTER STATE const !!!
 		Real64 const CWFlow, // chilled water flow [kg/s]
 		Real64 const HWFlow, // hot water flow [kg/s]
 		Real64 & LoadMet, // load met by unit [W]
-		Real64 & CWTempOut // chilled water outlet temperature [C]
+		Real64 & CWTempOut, // chilled water outlet temperature [C]
 		Real64 & HWTempOut, // hot water outlet temperature [C]
 	);
 
@@ -164,10 +171,6 @@ public: // Data
 	int cWInNodeNum; // chilled water inlet node
 	int cWOutNodeNum; // chilled water outlet nod
 	PlantLocation cWLocation; // chilled water plant loop location
-//	int CWLoopNum; // cooling water plant loop index number
-//	int CWLoopSideNum; // cooling water plant loop side index
-//	int CWBranchNum; // cooling water plant loop branch index
-//	int CWCompNum; // cooling water plant loop component index
 	//heating
 	bool beamHeatingPresent; // true if hot water system is connected to beam
 	Real64 vDotDesignHW; // Design hot water volume flow rate (autosizable) (m3/s)
@@ -186,10 +189,6 @@ public: // Data
 	int hWInNodeNum; // hot water inlet node
 	int hWOutNodeNum; // hot water outlet node
 	PlantLocation hWLocation; // hot water connection location structure
-//	int HWLoopNum; // cooling water plant loop index number
-//	int HWLoopSideNum; // cooling water plant loop side index
-//	int HWBranchNum; // cooling water plant loop branch index
-//	int HWCompNum; // cooling water plant loop component index
 	// simulation iteration controls
 	int beamLoadReSimIndex;
 	int beamCWMassFlowReSimIndex;
@@ -209,7 +208,9 @@ public: // Data
 
 }; // HVACFourPipeBeam
 
-namespace FourPipeBeam {
+
+
+extern Array1D< std::shared_ptr< HVACFourPipeBeam > > FourPipeBeams; // dimension to number of machines
 
 	void
 	SimFourPipeBeam(
