@@ -173,11 +173,11 @@ namespace FourPipeBeam {
 			thisBeam->vDotDesignPrimAirWasAutosized = true;
 		}
 		thisBeam->vDotDesignCW = rNumericArgs( 2 );
-		if ( thisBeam->vDotDesignCW == AutoSize ) {
+		if ( thisBeam->vDotDesignCW == AutoSize && thisBeam->beamCoolingPresent ) {
 			thisBeam->vDotDesignCWWasAutosized = true;
 		}
 		thisBeam->vDotDesignHW = rNumericArgs( 3 );
-		if ( thisBeam->vDotDesignHW == AutoSize ) {
+		if ( thisBeam->vDotDesignHW == AutoSize && thisBeam->beamHeatingPresent ) {
 			thisBeam->vDotDesignHWWasAutosized = true;
 		}
 		thisBeam->totBeamLength = rNumericArgs( 4 );
@@ -393,6 +393,7 @@ namespace FourPipeBeam {
 					ShowContinueError( "...Unit=[" + this->unitType + ',' + this->name + "] will not be simulated." );
 				}
 			this->zoneEquipmentListChecked = true;
+			}
 		}
 
 		if ( ! SysSizingCalc && this->mySizeFlag && ! this->plantLoopScanFlag ) {
@@ -510,28 +511,14 @@ namespace FourPipeBeam {
 	} //init
 
 	void
-	SizeFourPipeBeam( int const CBNum )
+	HVACFourPipeBeam::set_size( )
 	{
 
-		// SUBROUTINE INFORMATION:
-		//       AUTHOR         Fred Buhl
-		//       DATE WRITTEN   February 10, 2009
-		//       MODIFIED       na
-		//       RE-ENGINEERED  na
 
-		// PURPOSE OF THIS SUBROUTINE:
-		// This subroutine is for sizing cooled beam units for which flow rates have not been
-		// specified in the input
-
-		// METHODOLOGY EMPLOYED:
-		// Accesses zone sizing array for air flow rates and zone and plant sizing arrays to
-		// calculate coil water flow rates.
-
-		// REFERENCES:
-		// na
-
-		// Using/Aliasing
+		// Using
+		using DataEnvironment::StdRhoAir;
 		using namespace DataSizing;
+		using DataHVACGlobals::SmallAirVolFlow;
 		using namespace InputProcessor;
 		using DataGlobals::AutoCalculate;
 		using PlantUtilities::RegisterPlantCompDesignFlow;
@@ -541,6 +528,7 @@ namespace FourPipeBeam {
 		using FluidProperties::GetSpecificHeatGlycol;
 		using DataPlant::PlantLoop;
 		using DataPlant::MyPlantSizingIndex;
+		using Psychrometrics::PsyCpAirFnWTdb;
 
 		// Locals
 		// SUBROUTINE ARGUMENT DEFINITIONS:
@@ -555,15 +543,16 @@ namespace FourPipeBeam {
 		// na
 
 		// SUBROUTINE LOCAL VARIABLE DECLARATIONS:
-		static std::string const RoutineName( "SizeCoolBeam" );
-		static int PltSizCoolNum( 0 ); // index of plant sizing object for the cooling loop
+		static std::string const routineName( "HVACFourPipeBeam::set_size " );
+		static int pltSizCoolNum( 0 ); // index of plant sizing object for the cooling loop
+		static int pltSizHeatNum( 0 );
 		static int NumBeams( 0 ); // number of beams in the zone
 		static int Iter( 0 ); // beam length iteration index
-		static Real64 DesCoilLoad( 0.0 ); // total cooling capacity of the beams in the zone [W]
+
 		static Real64 DesLoadPerBeam( 0.0 ); // cooling capacity per individual beam [W]
-		static Real64 DesAirVolFlow( 0.0 ); // design total supply air flow rate [m3/s]
+
 		static Real64 DesAirFlowPerBeam( 0.0 ); // design supply air volumetric flow per beam [m3/s]
-		static Real64 RhoAir( 0.0 );
+
 		static Real64 CpAir( 0.0 );
 		static Real64 WaterVel( 0.0 ); // design water velocity in beam
 		static Real64 IndAirFlowPerBeamL( 0.0 ); // induced volumetric air flow rate per beam length [m3/s-m]
@@ -576,99 +565,177 @@ namespace FourPipeBeam {
 		bool ErrorsFound;
 		Real64 rho; // local fluid density
 		Real64 Cp; // local fluid specific heat
+		bool noHardSizeAnchorAvailable; // aid for complex logic surrounding mix of hard size and autosizes
 
-		PltSizCoolNum = 0;
-		DesAirVolFlow = 0.0;
-		CpAir = 0.0;
-		RhoAir = StdRhoAir;
-		ErrorsFound = false;
-		// find the appropriate Plant Sizing object
-		if ( CoolBeam( CBNum ).MaxAirVolFlow == AutoSize || CoolBeam( CBNum ).BeamLength == AutoSize ) {
-			PltSizCoolNum = MyPlantSizingIndex( "cooled beam unit", CoolBeam( CBNum ).Name, CoolBeam( CBNum ).CWInNode, CoolBeam( CBNum ).CWOutNode, ErrorsFound );
-		}
+		noHardSizeAnchorAvailable = false;
 
-		if ( CoolBeam( CBNum ).Kin == AutoCalculate ) {
-			if ( CoolBeam( CBNum ).CBType_Num == Passive_Cooled_Beam ) {
-				CoolBeam( CBNum ).Kin = 0.0;
-			} else {
-				CoolBeam( CBNum ).Kin = 2.0;
+		if ( this->totBeamLengthWasAutosized && this->vDotDesignPrimAirWasAutosized 
+			&& this->vDotDesignCWWasAutosized && this->vDotDesignHWWasAutosized ) {
+			noHardSizeAnchorAvailable = true;
+		} else if ( this->totBeamLengthWasAutosized && this->vDotDesignPrimAirWasAutosized 
+			&& this->vDotDesignCWWasAutosized && ! beamHeatingPresent) {
+			noHardSizeAnchorAvailable = true;
+		} else if ( this->totBeamLengthWasAutosized && this->vDotDesignPrimAirWasAutosized 
+			&& ! this->beamCoolingPresent && this->vDotDesignHWWasAutosized ) {
+			noHardSizeAnchorAvailable = true;
+		} else if ( ! this->totBeamLengthWasAutosized ) { // the simplest case is where length is not autosized
+			//use the normalized rated values (likely defaulted) with length to calculate any that are autosized
+			if ( this->vDotDesignPrimAirWasAutosized ) {
+				this->vDotDesignPrimAir = this->vDotNormRatedPrimAir * this->totBeamLength;
 			}
-			ReportSizingOutput( CoolBeam( CBNum ).UnitType, CoolBeam( CBNum ).Name, "Coefficient of Induction Kin", CoolBeam( CBNum ).Kin );
-
-		}
-
-		if ( CoolBeam( CBNum ).MaxAirVolFlow == AutoSize ) {
-
-			if ( CurZoneEqNum > 0 ) {
-
-				CheckZoneSizing( CoolBeam( CBNum ).UnitType, CoolBeam( CBNum ).Name );
-				CoolBeam( CBNum ).MaxAirVolFlow = max( TermUnitFinalZoneSizing( CurZoneEqNum ).DesCoolVolFlow, TermUnitFinalZoneSizing( CurZoneEqNum ).DesHeatVolFlow );
-				if ( CoolBeam( CBNum ).MaxAirVolFlow < SmallAirVolFlow ) {
-					CoolBeam( CBNum ).MaxAirVolFlow = 0.0;
+			if ( this->vDotDesignCWWasAutosized ) {
+				this->vDotDesignCW = this->vDotNormRatedCW * this->totBeamLength;
+			}
+			if ( vDotDesignHWWasAutosized ) {
+				this->vDotDesignHW = this->vDotNormRatedHW * this->totBeamLength;
+			}
+		} else { // need to find beam length
+			//the next simplest case is if the supply air rate is given
+			if ( ! this->vDotDesignPrimAirWasAutosized ) { // 
+				// find length from air flow rate and then proceed
+				this->totBeamLength = this->vDotDesignPrimAir / this->vDotNormRatedPrimAir;
+				if ( this->vDotDesignCWWasAutosized ) {
+					this->vDotDesignCW = this->vDotNormRatedCW * this->totBeamLength;
 				}
-				ReportSizingOutput( CoolBeam( CBNum ).UnitType, CoolBeam( CBNum ).Name, "Supply Air Flow Rate [m3/s]", CoolBeam( CBNum ).MaxAirVolFlow );
+				if ( vDotDesignHWWasAutosized ) {
+					this->vDotDesignHW = this->vDotNormRatedHW * this->totBeamLength;
+				}
+			} else { // both air and length are autosized
+				if (this->beamCoolingPresent && ! this->vDotDesignCWWasAutosized ) { // we have a chilled water flow rate to use
+					this->totBeamLength = this->vDotDesignCW / this->vDotNormRatedCW ;
+					this->vDotDesignPrimAir = this->vDotNormRatedPrimAir * this->totBeamLength;
+					if ( vDotDesignHWWasAutosized ) {
+						this->vDotDesignHW = this->vDotNormRatedHW * this->totBeamLength;
+					}
+				} else if ( this->beamHeatingPresent && ! this->vDotDesignHWWasAutosized ) {// we have a hot water flow rate to use
+					this->totBeamLength = this->vDotDesignHW / this->vDotNormRatedHW;
+					this->vDotDesignPrimAir = this->vDotNormRatedPrimAir * this->totBeamLength;
+					if ( this->vDotDesignCWWasAutosized ) { // don't think it can come here but...
+						this->vDotDesignCW = this->vDotNormRatedCW * this->totBeamLength;
+					}
+				} else {
+					// should not come here
+				}
+
 			}
 
 		}
 
-		if ( CoolBeam( CBNum ).MaxCoolWaterVolFlow == AutoSize ) {
 
+
+
+		CpAir = 0.0;
+
+		ErrorsFound = false;
+		// find the appropriate Plant Sizing object indices
+		pltSizCoolNum = 0;
+		if ( this->beamCoolingPresent && this->vDotDesignCWWasAutosized ) {
+			pltSizCoolNum = MyPlantSizingIndex( "four pipe beam unit", this->name, this->cWInNodeNum, this->cWOutNodeNum, ErrorsFound );
+		}
+		pltSizHeatNum = 0;
+		if ( this->beamHeatingPresent && this->vDotDesignHWWasAutosized ) {
+			pltSizHeatNum = MyPlantSizingIndex( "four pipe beam unit", this->name, this->hWInNodeNum, this->hWOutNodeNum, ErrorsFound );
+		}
+
+		if ( this->vDotDesignPrimAirWasAutosized ) {
 			if ( CurZoneEqNum > 0 ) {
+				CheckZoneSizing( this->unitType, this->name );
+				this->vDotDesignPrimAir = max(	TermUnitFinalZoneSizing( CurZoneEqNum ).DesCoolVolFlow, 
+												TermUnitFinalZoneSizing( CurZoneEqNum ).DesHeatVolFlow );
+				if ( this->vDotDesignPrimAir < SmallAirVolFlow ) {
+					this->vDotDesignPrimAir = 0.0;
+				}
+			}
+		}
 
-				CheckZoneSizing( CoolBeam( CBNum ).UnitType, CoolBeam( CBNum ).Name );
+		this->mDotDesignPrimAir = this->vDotDesignPrimAir * DataEnvironment::StdRhoAir; // convert to standard (elevation adjusted) mass flow rate
 
-				if ( PltSizCoolNum > 0 ) {
-
-					if ( FinalZoneSizing( CurZoneEqNum ).DesCoolMassFlow >= SmallAirVolFlow ) {
-						DesAirVolFlow = CoolBeam( CBNum ).MaxAirVolFlow;
-						CpAir = PsyCpAirFnWTdb( FinalZoneSizing( CurZoneEqNum ).CoolDesHumRat, FinalZoneSizing( CurZoneEqNum ).CoolDesTemp );
-						// the design cooling coil load is the zone load minus whatever the central system does. Note that
-						// DesCoolCoilInTempTU is really the primary air inlet temperature for the unit.
-						if ( FinalZoneSizing( CurZoneEqNum ).ZoneTempAtCoolPeak > 0.0 ) {
-							DesCoilLoad = FinalZoneSizing( CurZoneEqNum ).DesCoolLoad - CpAir * RhoAir * DesAirVolFlow * ( FinalZoneSizing( CurZoneEqNum ).ZoneTempAtCoolPeak - FinalZoneSizing( CurZoneEqNum ).DesCoolCoilInTempTU );
+		if (beamCoolingPresent ) {
+			rho = GetDensityGlycol( PlantLoop( this->cWLocation.LoopNum ).FluidName, DataGlobals::InitConvTemp, 
+									PlantLoop( this->cWLocation.LoopNum ).FluidIndex, routineName );
+			this->mDotNormRatedCW = this->vDotNormRatedCW * rho;
+			if ( this->vDotDesignCWWasAutosized ) {
+				if ( CurZoneEqNum > 0 ) {
+					CheckZoneSizing( this->unitType, this->name );
+					if ( pltSizCoolNum > 0 ) {
+						if ( FinalZoneSizing( CurZoneEqNum ).DesCoolMassFlow >= DataHVACGlobals::SmallAirVolFlow ) {
+							CpAir = PsyCpAirFnWTdb( FinalZoneSizing( CurZoneEqNum ).CoolDesHumRat, FinalZoneSizing( CurZoneEqNum ).CoolDesTemp );
+							// the design cooling coil load is the zone load minus whatever the central system does. Note that
+							// DesCoolCoilInTempTU is really the primary air inlet temperature for the unit.
+							if ( FinalZoneSizing( CurZoneEqNum ).ZoneTempAtCoolPeak > 0.0 ) {
+								this->beamDesignCoolingLoad = FinalZoneSizing( CurZoneEqNum ).DesCoolLoad - CpAir * DataEnvironment::StdRhoAir * this->vDotDesignPrimAir * ( FinalZoneSizing( CurZoneEqNum ).ZoneTempAtCoolPeak - FinalZoneSizing( CurZoneEqNum ).DesCoolCoilInTempTU );
+							} else {
+								this->beamDesignCoolingLoad = CpAir * DataEnvironment::StdRhoAir * this->vDotDesignPrimAir * ( FinalZoneSizing( CurZoneEqNum ).DesCoolCoilInTempTU - ZoneSizThermSetPtHi( CurZoneEqNum ) );
+							}
+							Cp = GetSpecificHeatGlycol( PlantLoop( this->cWLocation.LoopNum ).FluidName, DataGlobals::InitConvTemp,
+														PlantLoop( this->cWLocation.LoopNum ).FluidIndex, routineName );
+							this->vDotDesignCW = this->beamDesignCoolingLoad / ( ( DataSizing::PlantSizData( pltSizCoolNum ).DeltaT ) * Cp * rho );
+							this->vDotDesignCW = max( this->vDotDesignCW, 0.0 );
+							if ( this->vDotDesignCW < DataHVACGlobals::SmallWaterVolFlow ) {
+								this->vDotDesignCW = 0.0;
+							}
 						} else {
-							DesCoilLoad = CpAir * RhoAir * DesAirVolFlow * ( FinalZoneSizing( CurZoneEqNum ).DesCoolCoilInTempTU - ZoneSizThermSetPtHi( CurZoneEqNum ) );
-						}
-
-						rho = GetDensityGlycol( PlantLoop( CoolBeam( CBNum ).CWLoopNum ).FluidName, InitConvTemp, PlantLoop( CoolBeam( CBNum ).CWLoopNum ).FluidIndex, RoutineName );
-
-						Cp = GetSpecificHeatGlycol( PlantLoop( CoolBeam( CBNum ).CWLoopNum ).FluidName, InitConvTemp, PlantLoop( CoolBeam( CBNum ).CWLoopNum ).FluidIndex, RoutineName );
-
-						CoolBeam( CBNum ).MaxCoolWaterVolFlow = DesCoilLoad / ( ( CoolBeam( CBNum ).DesOutletWaterTemp - CoolBeam( CBNum ).DesInletWaterTemp ) * Cp * rho );
-						CoolBeam( CBNum ).MaxCoolWaterVolFlow = max( CoolBeam( CBNum ).MaxCoolWaterVolFlow, 0.0 );
-						if ( CoolBeam( CBNum ).MaxCoolWaterVolFlow < SmallWaterVolFlow ) {
-							CoolBeam( CBNum ).MaxCoolWaterVolFlow = 0.0;
+							this->vDotDesignCW = 0.0;
 						}
 					} else {
-						CoolBeam( CBNum ).MaxCoolWaterVolFlow = 0.0;
+						ShowSevereError( "Autosizing of water flow requires a cooling loop Sizing:Plant object" );
+						ShowContinueError( "Occurs in" + this->unitType + " Object=" + this->name );
+						ErrorsFound = true;
 					}
-
-					ReportSizingOutput( CoolBeam( CBNum ).UnitType, CoolBeam( CBNum ).Name, "Maximum Total Chilled Water Flow Rate [m3/s]", CoolBeam( CBNum ).MaxCoolWaterVolFlow );
-				} else {
-					ShowSevereError( "Autosizing of water flow requires a cooling loop Sizing:Plant object" );
-					ShowContinueError( "Occurs in" + CoolBeam( CBNum ).UnitType + " Object=" + CoolBeam( CBNum ).Name );
-					ErrorsFound = true;
 				}
-
 			}
-
+			this->mDotDesignCW = this->vDotDesignCW * rho;
 		}
 
-		if ( CoolBeam( CBNum ).NumBeams == AutoSize ) {
-			rho = GetDensityGlycol( PlantLoop( CoolBeam( CBNum ).CWLoopNum ).FluidName, InitConvTemp, PlantLoop( CoolBeam( CBNum ).CWLoopNum ).FluidIndex, RoutineName );
+		if (beamHeatingPresent ) {
+			rho = GetDensityGlycol( PlantLoop( this->hWLocation.LoopNum ).FluidName, DataGlobals::InitConvTemp, 
+									PlantLoop( this->hWLocation.LoopNum ).FluidIndex, routineName );
+			this->mDotNormRatedHW = this->vDotNormRatedHW * rho;
+			if ( this->vDotDesignHWWasAutosized ) {
+				if ( CurZoneEqNum > 0 ) {
+					CheckZoneSizing( this->unitType, this->name );
+					if ( pltSizHeatNum > 0 ) {
+						if ( FinalZoneSizing( CurZoneEqNum ).DesHeatMassFlow >= DataHVACGlobals::SmallAirVolFlow ) {
+							CpAir = PsyCpAirFnWTdb( FinalZoneSizing( CurZoneEqNum ).HeatDesHumRat, FinalZoneSizing( CurZoneEqNum ).HeatDesTemp );
+							// the design heating coil load is the zone load plus whatever the central system does. Note that
+							// DesCoolCoilInTempTU is really the primary air inlet temperature for the unit.
+							if ( FinalZoneSizing( CurZoneEqNum ).ZoneTempAtHeatPeak > 0.0 ) {
+								this->beamDesignHeatingLoad = FinalZoneSizing( CurZoneEqNum ).DesHeatLoad + CpAir * DataEnvironment::StdRhoAir * this->vDotDesignPrimAir * ( FinalZoneSizing( CurZoneEqNum ).ZoneTempAtHeatPeak - FinalZoneSizing( CurZoneEqNum ).DesHeatCoilInTempTU );
+							} else {
+								this->beamDesignHeatingLoad = CpAir * DataEnvironment::StdRhoAir * this->vDotDesignPrimAir * ( FinalZoneSizing( CurZoneEqNum ).DesHeatCoilInTempTU - ZoneSizThermSetPtLo( CurZoneEqNum ) );
+							}
+							Cp = GetSpecificHeatGlycol( PlantLoop( this->hWLocation.LoopNum ).FluidName, DataGlobals::InitConvTemp,
+														PlantLoop( this->hWLocation.LoopNum ).FluidIndex, routineName );
+							this->vDotDesignHW = this->beamDesignHeatingLoad / ( ( DataSizing::PlantSizData( pltSizHeatNum ).DeltaT ) * Cp * rho );
+							this->vDotDesignHW = max( this->vDotDesignHW, 0.0 );
+							if ( this->vDotDesignHW < DataHVACGlobals::SmallWaterVolFlow ) {
+								this->vDotDesignHW = 0.0;
+							}
+						} else {
+							this->vDotDesignHW = 0.0;
+						}
 
-			NumBeams = int( CoolBeam( CBNum ).MaxCoolWaterVolFlow * rho / NomMassFlowPerBeam ) + 1;
-			CoolBeam( CBNum ).NumBeams = double( NumBeams );
-			ReportSizingOutput( CoolBeam( CBNum ).UnitType, CoolBeam( CBNum ).Name, "Number of Beams", CoolBeam( CBNum ).NumBeams );
+
+					} else {
+						ShowSevereError( "Autosizing of water flow requires a heating loop Sizing:Plant object" );
+						ShowContinueError( "Occurs in" + this->unitType + " Object=" + this->name );
+						ErrorsFound = true;
+					}
+				}
+			}
+			this->mDotDesignHW = this->vDotDesignHW * rho;
 		}
 
-		if ( CoolBeam( CBNum ).BeamLength == AutoSize ) {
+
+
+
+		if ( this->totBeamLengthWasAutosized ) {
 
 			if ( CurZoneEqNum > 0 ) {
 
-				CheckZoneSizing( CoolBeam( CBNum ).UnitType, CoolBeam( CBNum ).Name );
+				CheckZoneSizing( this->unitType, this->name );
 
-				if ( PltSizCoolNum > 0 ) {
+				if ( pltSizCoolNum > 0 ) {
 					rho = GetDensityGlycol( PlantLoop( CoolBeam( CBNum ).CWLoopNum ).FluidName, InitConvTemp, PlantLoop( CoolBeam( CBNum ).CWLoopNum ).FluidIndex, RoutineName );
 
 					Cp = GetSpecificHeatGlycol( PlantLoop( CoolBeam( CBNum ).CWLoopNum ).FluidName, InitConvTemp, PlantLoop( CoolBeam( CBNum ).CWLoopNum ).FluidIndex, RoutineName );
@@ -721,16 +788,38 @@ namespace FourPipeBeam {
 
 		}
 
-		// save the design water volumetric flow rate for use by the water loop sizing algorithms
-		if ( CoolBeam( CBNum ).MaxCoolWaterVolFlow > 0.0 ) {
-			RegisterPlantCompDesignFlow( CoolBeam( CBNum ).CWInNode, CoolBeam( CBNum ).MaxCoolWaterVolFlow );
-		}
+		// now test calculation running the full model
 
+
+		// fill in mass flow rate versions of working variables
+
+		this->mDotNormRatedPrimAir = this->vDotNormRatedPrimAir * DataEnvironment::StdRhoAir; // convert to standard (elevation adjusted) mass flow rate
+
+		// report sizes if autosized
+		if ( this->vDotDesignPrimAirWasAutosized ) {
+			ReportSizingOutput( this->unitType, this->name, "Supply Air Flow Rate [m3/s]", this->vDotDesignPrimAir );
+		}
+		if ( this->vDotDesignCWWasAutosized ) {
+			ReportSizingOutput( this->unitType, this->name, "Maximum Total Chilled Water Flow Rate [m3/s]", this->vDotDesignCW );
+		}
+		if ( this->vDotDesignHWWasAutosized ) {
+			ReportSizingOutput( this->unitType, this->name, "Maximum Total Hot Water Flow Rate [m3/s]", this->vDotDesignHW );
+		}
+		if ( this->totBeamLengthWasAutosized ) {
+			ReportSizingOutput( this->unitType, this->name, "Zone Total Beam Length [m]", this->totBeamLength);
+		}
+		// save the design water volumetric flow rate for use by the water loop sizing algorithms
+		if ( this->vDotDesignCW > 0.0 ) {
+			RegisterPlantCompDesignFlow( this->cWInNodeNum, this->vDotDesignCW );
+		}
+		if ( this->vDotDesignHW > 0.0 ) {
+			RegisterPlantCompDesignFlow( this->hWInNodeNum, this->vDotDesignHW );
+		}
 		if ( ErrorsFound ) {
 			ShowFatalError( "Preceding cooled beam sizing errors cause program termination" );
 		}
 
-	}
+	} //set_size
 
 	void
 	ControlFourPipeBeam(
