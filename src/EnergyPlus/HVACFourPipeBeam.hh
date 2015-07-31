@@ -89,7 +89,7 @@ public: // Creation
 public: // Methods		MARK ANY THAT DON'T ALTER STATE const !!!
 
 	static std::shared_ptr< AirTerminalUnit >
-	FourPipeBeamFactory(
+	fourPipeBeamFactory(
 		int objectType,
 		std::string objectName
 	);
@@ -132,7 +132,6 @@ public: // Methods		MARK ANY THAT DON'T ALTER STATE const !!!
 		bool const FirstHVACIteration, // TRUE if first HVAC iteration in time step
 		int const ZoneNum, // index of zone served by the unit
 		int const ZoneNodeNum, // zone node number of zone served by the unit
-		int & CompIndex, // which beam unit in data structure
 		Real64 & NonAirSysOutput // convective cooling by the beam system [W]
 	);
 
@@ -140,7 +139,7 @@ public: // Methods		MARK ANY THAT DON'T ALTER STATE const !!!
 	update();
 
 	void
-	report() const;
+	report() ;
 
 public: // Data
 
@@ -212,15 +211,6 @@ public: // Data
 
 extern Array1D< std::shared_ptr< HVACFourPipeBeam > > FourPipeBeams; // dimension to number of machines
 
-	void
-	SimFourPipeBeam(
-		std::string const & CompName, // name of the beam unit
-		bool const FirstHVACIteration, // TRUE if first HVAC iteration in time step
-		int const ZoneNum, // index of zone served by the unit
-		int const ZoneNodeNum, // zone node number of zone served by the unit
-		int & CompIndex, // which beam unit in data structure
-		Real64 & NonAirSysOutput // convective cooling by the beam system [W]
-	); // This can forward to simulate()
 
 } // FourPipeBeam
 

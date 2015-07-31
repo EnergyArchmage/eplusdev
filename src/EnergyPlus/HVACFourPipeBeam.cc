@@ -31,6 +31,7 @@
 #include <ReportSizingManager.hh>
 #include <ScheduleManager.hh>
 #include <UtilityRoutines.hh>
+#include <CurveManager.hh>
 
 
 namespace EnergyPlus {
@@ -42,16 +43,17 @@ namespace FourPipeBeam {
 	HVACFourPipeBeam::HVACFourPipeBeam(){}
 
 	std::shared_ptr< AirTerminalUnit > 
-	HVACFourPipeBeam::FourPipeBeamFactory(
+	HVACFourPipeBeam::fourPipeBeamFactory(
 		int EP_UNUSED(objectType),
 		std::string objectName
 	){
 	
-		using InputProcessor::GetNumObjectsFound;
+
+		using InputProcessor::GetObjectItemNum;
 		using InputProcessor::GetObjectItem;
-		using InputProcessor::VerifyName;
+
 		using InputProcessor::SameString;
-		using InputProcessor::GetObjectDefMaxArgs;
+
 		using NodeInputManager::GetOnlySingleNode;
 		using BranchNodeConnections::TestCompSet;
 		using BranchNodeConnections::SetUpCompSets;
@@ -85,14 +87,9 @@ namespace FourPipeBeam {
 
 		// find the number of cooled beam units
 		cCurrentModuleObject = "AirTerminal:SingleDuct:ConstantVolume:FourPipeBeam";
-		NumFourPipeBeams = GetNumObjectsFound( cCurrentModuleObject );
-		// allocate the data structures
-		FourPipeBeam.allocate( NumFourPipeBeams );
-		CheckEquipName.dimension( NumFourPipeBeams, true );
 
 		NumAlphas = 16;
 		NumNumbers = 11;
-
 
 		// find beam index from name
 		beamIndex = InputProcessor::GetObjectItemNum(cCurrentModuleObject, objectName );

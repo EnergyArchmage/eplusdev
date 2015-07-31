@@ -77,9 +77,7 @@ protected: // Assignment
 
 public: // Methods		REMOVE ANY OF THESE THAT AREN'T COMMON (WITH SAME ARGS) TO ALL SUB-TYPES
 
-	virtual
-	void
-	get_input() const = 0;
+
 
 	virtual
 	void
@@ -97,7 +95,6 @@ public: // Methods		REMOVE ANY OF THESE THAT AREN'T COMMON (WITH SAME ARGS) TO A
 		bool const FirstHVACIteration, // TRUE if first HVAC iteration in time step
 		int const ZoneNum, // index of zone served by the unit
 		int const ZoneNodeNum, // zone node number of zone served by the unit
-		int & CompIndex, // which beam unit in data structure
 		Real64 & NonAirSysOutput // convective cooling by the beam system [W]
 	) = 0;
 
@@ -107,7 +104,7 @@ public: // Methods		REMOVE ANY OF THESE THAT AREN'T COMMON (WITH SAME ARGS) TO A
 
 	virtual
 	void
-	report() const = 0;
+	report() = 0;
 
 
 public: // Data
