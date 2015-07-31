@@ -111,7 +111,7 @@ public: // Data
 
 	AirTerminalUnitType terminalType; // Type of air distribution unit  //Legacy For use during transition to OO
 	std::string name; // name of unit
-	std::string unitType; // type of unit = AirTerminal:SingleDuct:ConstantVolume:FourPipeBeam
+	std::string unitType; // type of unit = e.g. AirTerminal:SingleDuct:ConstantVolume:FourPipeBeam
 	int aDUNum; // index of this unit in the corresponding air distribution unit structure
 	int airAvailSchedNum; // index to schedule for pimary air availability
 	bool airAvailable; // true if primary air is available

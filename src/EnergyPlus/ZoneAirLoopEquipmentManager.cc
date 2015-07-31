@@ -26,6 +26,7 @@
 #include <SingleDuct.hh>
 #include <UserDefinedComponents.hh>
 #include <UtilityRoutines.hh>
+#include <AirTerminalUnit.hh>
 #include <HVACFourPipeBeam.hh>
 
 namespace EnergyPlus {
@@ -353,7 +354,7 @@ namespace ZoneAirLoopEquipmentManager {
 					}
 				} else if ( SameString( AirDistUnit( AirDistUnitNum ).EquipType( AirDistCompUnitNum ), "AirTerminal:SingleDuct:ConstantVolume:FourPipeBeam" ) ) {
 					AirDistUnit( AirDistUnitNum ).EquipType_Num( AirDistCompUnitNum ) = SingleDuctConstVolFourPipeBeam;
-					AirDistUnit( AirDistUnitNum ).airTerminalPtr = FourPipeBeam::HVACFourPipeBeam::FourPipeBeamFactory(SingleDuctConstVolFourPipeBeam, AirDistUnit( AirDistUnitNum ).EquipName( 1 ));
+					AirDistUnit( AirDistUnitNum ).airTerminalPtr = FourPipeBeam::HVACFourPipeBeam::fourPipeBeamFactory(SingleDuctConstVolFourPipeBeam, AirDistUnit( AirDistUnitNum ).EquipName( 1 ));
 					if ( AirDistUnit( AirDistUnitNum ).UpStreamLeak || AirDistUnit( AirDistUnitNum ).DownStreamLeak ) {
 						ShowSevereError( "Error found in " + CurrentModuleObject + " = " + AirDistUnit( AirDistUnitNum ).Name );
 						ShowContinueError( "Simple duct leakage model not available for " + cAlphaFields( 3 ) + " = " + AirDistUnit( AirDistUnitNum ).EquipType( AirDistCompUnitNum ) );
@@ -510,7 +511,7 @@ namespace ZoneAirLoopEquipmentManager {
 		using HVACSingleDuctInduc::SimIndUnit;
 		using HVACCooledBeam::SimCoolBeam;
 		using UserDefinedComponents::SimAirTerminalUserDefined;
-		using HVACFourPipeBeam::SimFourPipeBeam;
+
 
 		// Locals
 		// SUBROUTINE ARGUMENT DEFINITIONS:
@@ -611,7 +612,7 @@ namespace ZoneAirLoopEquipmentManager {
 				SimCoolBeam( AirDistUnit( AirDistUnitNum ).EquipName( AirDistCompNum ), FirstHVACIteration, ActualZoneNum, ZoneEquipConfig( ControlledZoneNum ).ZoneNode, AirDistUnit( AirDistUnitNum ).EquipIndex( AirDistCompNum ), NonAirSysOutput );
 
 			} else if ( SELECT_CASE_var == SingleDuctConstVolFourPipeBeam ) {
-				SimFourPipeBeam( AirDistUnit( AirDistUnitNum ).EquipName( AirDistCompNum ), FirstHVACIteration, ActualZoneNum, ZoneEquipConfig( ControlledZoneNum ).ZoneNode, AirDistUnit( AirDistUnitNum ).EquipIndex( AirDistCompNum ), NonAirSysOutput );
+				AirDistUnit( AirDistUnitNum ).airTerminalPtr->simulate(FirstHVACIteration, ActualZoneNum, ZoneEquipConfig( ControlledZoneNum ).ZoneNode,  NonAirSysOutput  );
 
 			} else if ( SELECT_CASE_var == SingleDuctUserDefined ) {
 				SimAirTerminalUserDefined( AirDistUnit( AirDistUnitNum ).EquipName( AirDistCompNum ), FirstHVACIteration, ActualZoneNum, ZoneEquipConfig( ControlledZoneNum ).ZoneNode, AirDistUnit( AirDistUnitNum ).EquipIndex( AirDistCompNum ) );

@@ -53,7 +53,11 @@ namespace FourPipeBeam {
 		using InputProcessor::GetObjectItem;
 
 		using InputProcessor::SameString;
-
+		using DataLoopNode::NodeConnectionType_Inlet;
+		using DataLoopNode::NodeConnectionType_Outlet;
+		using DataLoopNode::NodeType_Air;
+		using DataLoopNode::NodeType_Water;
+		using DataLoopNode::ObjectIsNotParent;
 		using NodeInputManager::GetOnlySingleNode;
 		using BranchNodeConnections::TestCompSet;
 		using BranchNodeConnections::SetUpCompSets;
@@ -64,7 +68,7 @@ namespace FourPipeBeam {
 		using CurveManager::GetCurveIndex;
 		using namespace DataIPShortCuts;
 		using ScheduleManager::GetScheduleIndex;
-
+		using DataGlobals::ScheduleAlwaysOn;
 		static std::string const routineName( "FourPipeBeamFactory " ); // include trailing blank space
 
 		int beamIndex; // loop index
@@ -138,15 +142,27 @@ namespace FourPipeBeam {
 
 		thisBeam->airInNodeNum = GetOnlySingleNode( cAlphaArgs( 5 ), ErrorsFound, cCurrentModuleObject, cAlphaArgs( 1 ), NodeType_Air, NodeConnectionType_Inlet, 1, ObjectIsNotParent, cAlphaFieldNames( 5 ) );
 		thisBeam->airOutNodeNum = GetOnlySingleNode( cAlphaArgs( 6 ), ErrorsFound, cCurrentModuleObject, cAlphaArgs( 1 ), NodeType_Air, NodeConnectionType_Outlet, 1, ObjectIsNotParent, cAlphaFieldNames( 6 ) );
-		if ( lAlphaFieldBlanks( 7 ) && lAlphaFieldBlanks( 8 ) ) {
+		if ( lAlphaFieldBlanks( 7 ) && lAlphaFieldBlanks( 8 ) ) { // no chilled water nodes, no beam cooling
 			thisBeam->beamCoolingPresent = false;
+		} else if ( lAlphaFieldBlanks( 7 ) && ! lAlphaFieldBlanks( 8 ) ){ // outlet node but no inlet node for chilled water
+			thisBeam->beamCoolingPresent = false;
+			ShowWarningError( routineName + cCurrentModuleObject + ": missing " + cAlphaFieldNames( 7 ) + " for " + cAlphaFieldNames( 1 ) + '=' + cAlphaArgs( 1 ) + ", simulation continues with no beam cooling" );
+		} else if ( ! lAlphaFieldBlanks( 7 ) &&  lAlphaFieldBlanks( 8 ) ){ // inlet node but no outlet node for chilled water
+			thisBeam->beamCoolingPresent = false;
+			ShowWarningError( routineName + cCurrentModuleObject + ": missing " + cAlphaFieldNames( 8 ) + " for " + cAlphaFieldNames( 1 ) + '=' + cAlphaArgs( 1 ) + ", simulation continues with no beam cooling" );
 		} else {
 			thisBeam->beamCoolingPresent = true;
 			thisBeam->cWInNodeNum = GetOnlySingleNode( cAlphaArgs( 7 ), ErrorsFound, cCurrentModuleObject, cAlphaArgs( 1 ), NodeType_Water, NodeConnectionType_Inlet, 2, ObjectIsNotParent, cAlphaFieldNames( 7 ) );
 			thisBeam->cWOutNodeNum = GetOnlySingleNode( cAlphaArgs( 8 ), ErrorsFound, cCurrentModuleObject, cAlphaArgs( 1 ), NodeType_Water, NodeConnectionType_Outlet, 2, ObjectIsNotParent, cAlphaFieldNames( 8 ) );
 		}
-		if ( lAlphaFieldBlanks( 9 ) && lAlphaFieldBlanks( 10 ) ) {
+		if ( lAlphaFieldBlanks( 9 ) && lAlphaFieldBlanks( 10 ) ) { // no hot water nodes, no beam heating
 			thisBeam->beamHeatingPresent = false;
+		} else if ( lAlphaFieldBlanks( 9 ) && ! lAlphaFieldBlanks( 10 ) ){ // outlet node but no inlet node for hot water
+			thisBeam->beamHeatingPresent = false;
+			ShowWarningError( routineName + cCurrentModuleObject + ": missing " + cAlphaFieldNames( 9 ) + " for " + cAlphaFieldNames( 1 ) + '=' + cAlphaArgs( 1 ) + ", simulation continues with no beam heating" );
+		} else if ( ! lAlphaFieldBlanks( 9 ) &&  lAlphaFieldBlanks( 10 ) ){ // inlet node but no outlet node for hot water
+			thisBeam->beamHeatingPresent = false;
+			ShowWarningError( routineName + cCurrentModuleObject + ": missing " + cAlphaFieldNames( 10 ) + " for " + cAlphaFieldNames( 1 ) + '=' + cAlphaArgs( 1 ) + ", simulation continues with no beam heating" );
 		} else {
 			thisBeam->beamHeatingPresent = true;
 			thisBeam->hWInNodeNum = GetOnlySingleNode( cAlphaArgs( 9 ), ErrorsFound, cCurrentModuleObject, cAlphaArgs( 1 ), NodeType_Water, NodeConnectionType_Inlet, 2, ObjectIsNotParent, cAlphaFieldNames( 9 ) );
@@ -326,147 +342,172 @@ namespace FourPipeBeam {
 
 	void
 	HVACFourPipeBeam::init(
-
 		bool const FirstHVACIteration // TRUE if first air loop solution this HVAC step
 	)
 	{
-
-
-		// Using/Aliasing
+	
+		// Using
 		using DataZoneEquipment::ZoneEquipInputsFilled;
 		using DataZoneEquipment::CheckZoneEquipmentList;
 		using DataDefineEquip::AirDistUnit;
-		using InputProcessor::SameString;
 		using DataPlant::PlantLoop;
 		using DataPlant::ScanPlantLoopsForObject;
 		using DataPlant::TypeOf_FourPipeBeamAirTerminal;
-		using FluidProperties::GetDensityGlycol;
 		using PlantUtilities::InitComponentNodes;
 		using PlantUtilities::SetComponentFlowRate;
+		using DataGlobals::SysSizingCalc;
+		using DataGlobals::BeginEnvrnFlag;
+		using DataLoopNode::Node;
+		using ScheduleManager::GetCurrentScheduleValue;
 
+		static std::string const routineName( "HVACFourPipeBeam::init" );
 
-		static std::string const RoutineName( "HVACFourPipeBeam::init" );
+		bool errFlag = false;
 
-
-		int InAirNode; // supply air inlet node number
-		int OutAirNode; // unit air outlet node
-		int InWaterNode; // unit inlet chilled water node
-		int OutWaterNode; // unit outlet chilled water node
-		Real64 RhoAir; // air density at outside pressure and standard temperature and humidity
-		static bool MyOneTimeFlag( true );
-		static Array1D_bool MyEnvrnFlag;
-		static Array1D_bool MySizeFlag;
-		static Array1D_bool PlantLoopScanFlag;
-		Real64 rho; // local fluid density
-		static bool ZoneEquipmentListChecked( false ); // True after the Zone Equipment List has been checked for items
-		int Loop; // Loop checking control variable
-		std::string CurrentModuleObject;
-		bool errFlag;
-
-		CurrentModuleObject = "AirTerminal:SingleDuct:ConstantVolume:FourPipeBeam";
-		// Do the one time initializations
-		if ( MyOneTimeFlag ) {
-
-			MyEnvrnFlag.allocate( NumCB );
-			MySizeFlag.allocate( NumCB );
-			PlantLoopScanFlag.allocate( NumCB );
-			MyEnvrnFlag = true;
-			MySizeFlag = true;
-			PlantLoopScanFlag = true;
-			MyOneTimeFlag = false;
-
-		}
-
-		if ( PlantLoopScanFlag( CBNum ) && allocated( PlantLoop ) ) {
+		if ( this->plantLoopScanFlag && allocated( PlantLoop ) ) {
 			errFlag = false;
-			ScanPlantLoopsForObject( CoolBeam( CBNum ).Name, TypeOf_FourPipeBeamAirTerminal, CoolBeam( CBNum ).CWLoopNum, CoolBeam( CBNum ).CWLoopSideNum, CoolBeam( CBNum ).CWBranchNum, CoolBeam( CBNum ).CWCompNum, _, _, _, _, _, errFlag );
-			if ( errFlag ) {
-				ShowFatalError( "InitCoolBeam: Program terminated for previous conditions." );
+			if (this->beamCoolingPresent){
+				ScanPlantLoopsForObject( this->name, TypeOf_FourPipeBeamAirTerminal, this->cWLocation.LoopNum, 
+					this->cWLocation.LoopSideNum, this->cWLocation.BranchNum, this->cWLocation.CompNum, _, _, _, 
+					this->cWInNodeNum, _, errFlag );
+				if ( errFlag ) {
+					ShowFatalError( routineName + " Program terminated for previous conditions." );
+				}
 			}
-			PlantLoopScanFlag( CBNum ) = false;
-
+			if (this->beamHeatingPresent ){
+				ScanPlantLoopsForObject( this->name, TypeOf_FourPipeBeamAirTerminal, this->hWLocation.LoopNum, 
+					this->hWLocation.LoopSideNum, this->hWLocation.BranchNum, this->hWLocation.CompNum, _, _, _, 
+					this->hWInNodeNum, _, errFlag );
+				if ( errFlag ) {
+					ShowFatalError( routineName + " Program terminated for previous conditions." );
+				}
+			}
+			this->plantLoopScanFlag = false;
 		}
 
-		if ( ! ZoneEquipmentListChecked && ZoneEquipInputsFilled ) {
-			ZoneEquipmentListChecked = true;
+		if ( ! this->zoneEquipmentListChecked && ZoneEquipInputsFilled ) {
 			// Check to see if there is a Air Distribution Unit on the Zone Equipment List
-			for ( Loop = 1; Loop <= NumCB; ++Loop ) {
-				if ( CoolBeam( Loop ).ADUNum == 0 ) continue;
-				if ( CheckZoneEquipmentList( "ZONEHVAC:AIRDISTRIBUTIONUNIT", AirDistUnit( CoolBeam( Loop ).ADUNum ).Name ) ) continue;
-				ShowSevereError( "InitCoolBeam: ADU=[Air Distribution Unit," + AirDistUnit( CoolBeam( Loop ).ADUNum ).Name + "] is not on any ZoneHVAC:EquipmentList." );
-				ShowContinueError( "...Unit=[" + CurrentModuleObject + ',' + CoolBeam( Loop ).Name + "] will not be simulated." );
-			}
+			if ( this->aDUNum != 0 ) {
+				if ( ! CheckZoneEquipmentList( "ZONEHVAC:AIRDISTRIBUTIONUNIT", AirDistUnit( this->aDUNum ).Name ) ) {
+					ShowSevereError( routineName + ": ADU=[Air Distribution Unit," + AirDistUnit( this->aDUNum ).Name + "] is not on any ZoneHVAC:EquipmentList." );
+					ShowContinueError( "...Unit=[" + this->unitType + ',' + this->name + "] will not be simulated." );
+				}
+			this->zoneEquipmentListChecked = true;
 		}
 
-		if ( ! SysSizingCalc && MySizeFlag( CBNum ) && ! PlantLoopScanFlag( CBNum ) ) {
-
-			SizeCoolBeam( CBNum );
-
-			InWaterNode = CoolBeam( CBNum ).CWInNode;
-			OutWaterNode = CoolBeam( CBNum ).CWOutNode;
-			rho = GetDensityGlycol( PlantLoop( CoolBeam( CBNum ).CWLoopNum ).FluidName, InitConvTemp, PlantLoop( CoolBeam( CBNum ).CWLoopNum ).FluidIndex, RoutineName );
-			CoolBeam( CBNum ).MaxCoolWaterMassFlow = rho * CoolBeam( CBNum ).MaxCoolWaterVolFlow;
-			InitComponentNodes( 0.0, CoolBeam( CBNum ).MaxCoolWaterMassFlow, InWaterNode, OutWaterNode, CoolBeam( CBNum ).CWLoopNum, CoolBeam( CBNum ).CWLoopSideNum, CoolBeam( CBNum ).CWBranchNum, CoolBeam( CBNum ).CWCompNum );
-			MySizeFlag( CBNum ) = false;
-
+		if ( ! SysSizingCalc && this->mySizeFlag && ! this->plantLoopScanFlag ) {
+			this->set_size(); // calculate autosize values (in any) and convert volume flow rates to mass flow rates
+			if (this->beamCoolingPresent ) { // initialize chilled water design mass flow rate in plant routines
+				InitComponentNodes( 0.0, 
+									this->mDotDesignCW, 
+									this->cWInNodeNum, 
+									this->cWOutNodeNum, 
+									this->cWLocation.LoopNum, 
+									this->cWLocation.LoopSideNum, 
+									this->cWLocation.BranchNum, 
+									this->cWLocation.CompNum 
+									);
+			}
+			if (this->beamHeatingPresent ) { // initialize hot water design mass flow rate in plant routines
+				InitComponentNodes( 0.0, 
+									this->mDotDesignHW, 
+									this->hWInNodeNum, 
+									this->hWOutNodeNum, 
+									this->hWLocation.LoopNum, 
+									this->hWLocation.LoopSideNum, 
+									this->hWLocation.BranchNum, 
+									this->hWLocation.CompNum 
+									);
+			}
+			this->mySizeFlag = false;
 		}
 
 		// Do the Begin Environment initializations
-		if ( BeginEnvrnFlag && MyEnvrnFlag( CBNum ) ) {
-			RhoAir = StdRhoAir;
-			InAirNode = CoolBeam( CBNum ).AirInNode;
-			OutAirNode = CoolBeam( CBNum ).AirOutNode;
-			// set the mass flow rates from the input volume flow rates
-			CoolBeam( CBNum ).MaxAirMassFlow = RhoAir * CoolBeam( CBNum ).MaxAirVolFlow;
-			Node( InAirNode ).MassFlowRateMax = CoolBeam( CBNum ).MaxAirMassFlow;
-			Node( OutAirNode ).MassFlowRateMax = CoolBeam( CBNum ).MaxAirMassFlow;
-			Node( InAirNode ).MassFlowRateMin = 0.0;
-			Node( OutAirNode ).MassFlowRateMin = 0.0;
+		if ( BeginEnvrnFlag && this->myEnvrnFlag ) {
 
-			InWaterNode = CoolBeam( CBNum ).CWInNode;
-			OutWaterNode = CoolBeam( CBNum ).CWOutNode;
-			InitComponentNodes( 0.0, CoolBeam( CBNum ).MaxCoolWaterMassFlow, InWaterNode, OutWaterNode, CoolBeam( CBNum ).CWLoopNum, CoolBeam( CBNum ).CWLoopSideNum, CoolBeam( CBNum ).CWBranchNum, CoolBeam( CBNum ).CWCompNum );
+			Node( this->airInNodeNum  ).MassFlowRateMax  = this->mDotDesignPrimAir;
+			Node( this->airOutNodeNum ).MassFlowRateMax = this->mDotDesignPrimAir;
+			Node( this->airInNodeNum  ).MassFlowRateMin = 0.0;
+			Node( this->airOutNodeNum ).MassFlowRateMin = 0.0;
 
-			MyEnvrnFlag( CBNum ) = false;
+			if (this->beamCoolingPresent ) { // initialize chilled water design mass flow rate in plant routines
+				InitComponentNodes( 0.0, 
+									this->mDotDesignCW, 
+									this->cWInNodeNum, 
+									this->cWOutNodeNum, 
+									this->cWLocation.LoopNum, 
+									this->cWLocation.LoopSideNum, 
+									this->cWLocation.BranchNum, 
+									this->cWLocation.CompNum 
+									);
+			}
+			if (this->beamHeatingPresent ) { // initialize hot water design mass flow rate in plant routines
+				InitComponentNodes( 0.0, 
+									this->mDotDesignHW, 
+									this->hWInNodeNum, 
+									this->hWOutNodeNum, 
+									this->hWLocation.LoopNum, 
+									this->hWLocation.LoopSideNum, 
+									this->hWLocation.BranchNum, 
+									this->hWLocation.CompNum 
+									);
+			}
+
+			this->myEnvrnFlag = false;
 		} // end one time inits
 
 		if ( ! BeginEnvrnFlag ) {
-			MyEnvrnFlag( CBNum ) = true;
+			this->myEnvrnFlag = true;
 		}
-
-		InAirNode = CoolBeam( CBNum ).AirInNode;
-		OutAirNode = CoolBeam( CBNum ).AirOutNode;
 
 		// Do the start of HVAC time step initializations
 		if ( FirstHVACIteration ) {
-			// check for upstream zero flow. If nonzero and schedule ON, set primary flow to max
-			if ( GetCurrentScheduleValue( CoolBeam( CBNum ).SchedPtr ) > 0.0 && Node( InAirNode ).MassFlowRate > 0.0 ) {
-				Node( InAirNode ).MassFlowRate = CoolBeam( CBNum ).MaxAirMassFlow;
+			// check availability schedules and set flags
+			if (GetCurrentScheduleValue( this->airAvailSchedNum ) > 0.0 ){
+				this->airAvailable =  true;
 			} else {
-				Node( InAirNode ).MassFlowRate = 0.0;
+				this->airAvailable = false;
+			}
+			if ( beamCoolingPresent && ( GetCurrentScheduleValue( this->coolingAvailSchedNum ) > 0.0) ) {
+				this->coolingAvailable = true;
+			} else {
+				this->coolingAvailable = false;
+			}
+			if ( beamHeatingPresent && ( GetCurrentScheduleValue( this->heatingAvailSchedNum ) > 0.0) ) {
+				this->heatingAvailable = true;
+			} else {
+				this->heatingAvailable = false;
+			}
+			// check for upstream zero flow. If nonzero and air available, set primary flow to max
+			if ( this->airAvailable && Node( this->airInNodeNum ).MassFlowRate > 0.0 ) {
+				Node( this->airInNodeNum ).MassFlowRate = this->mDotDesignPrimAir;
+			} else {
+				Node( this->airInNodeNum ).MassFlowRate = 0.0;
 			}
 			// reset the max and min avail flows
-			if ( GetCurrentScheduleValue( CoolBeam( CBNum ).SchedPtr ) > 0.0 && Node( InAirNode ).MassFlowRateMaxAvail > 0.0 ) {
-				Node( InAirNode ).MassFlowRateMaxAvail = CoolBeam( CBNum ).MaxAirMassFlow;
-				Node( InAirNode ).MassFlowRateMinAvail = CoolBeam( CBNum ).MaxAirMassFlow;
+			if ( this->airAvailable && Node( this->airInNodeNum ).MassFlowRateMaxAvail > 0.0 ) {
+				Node( this->airInNodeNum ).MassFlowRateMaxAvail = this->mDotDesignPrimAir;
+				Node( this->airInNodeNum ).MassFlowRateMinAvail = this->mDotDesignPrimAir;
 			} else {
-				Node( InAirNode ).MassFlowRateMaxAvail = 0.0;
-				Node( InAirNode ).MassFlowRateMinAvail = 0.0;
+				Node( this->airInNodeNum ).MassFlowRateMaxAvail = 0.0;
+				Node( this->airInNodeNum ).MassFlowRateMinAvail = 0.0;
 			}
-			//Plant should do this    InWaterNode = CoolBeam(CBNum)%CWInNode
-			//    Node(InWaterNode)%MassFlowRateMaxAvail = CoolBeam(CBNum)%MaxCoolWaterMassFlow
-			//    Node(InWaterNode)%MassFlowRateMinAvail = 0.0
 		}
 
 		// do these initializations every time step
-		InWaterNode = CoolBeam( CBNum ).CWInNode;
-		CoolBeam( CBNum ).TWIn = Node( InWaterNode ).Temp;
-		CoolBeam( CBNum ).SupAirCoolingRate = 0.0;
-		CoolBeam( CBNum ).SupAirHeatingRate = 0.0;
+		if ( beamCoolingPresent ) {
+			this->cWTempIn = Node( this->cWInNodeNum ).Temp;
+		}
+		if ( beamHeatingPresent ) {
+			this->hWTempIn = Node( this->hWInNodeNum ).Temp;
+		}
+		this->supAirCoolingRate = 0.0;
+		this->supAirHeatingRate = 0.0;
+		this->beamCoolingRate = 0.0;
+		this->beamHeatingRate = 0.0;
+		this->primAirFlow = 0.0;
 
-		// CoolBeam(CBNum)%BeamFlow = Node(InAirNode)%MassFlowRate / (StdRhoAir*CoolBeam(CBNum)%NumBeams)
-
-	}
+	} //init
 
 	void
 	SizeFourPipeBeam( int const CBNum )

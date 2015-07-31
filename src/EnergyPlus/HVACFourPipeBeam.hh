@@ -78,7 +78,11 @@ public: // Creation
 		supAirCoolingRate( 0.0 ),
 		supAirHeatingEnergy( 0.0 ),
 		supAirHeatingRate( 0.0 ),
-		primAirFlow( 0.0 )
+		primAirFlow( 0.0 ),
+		myEnvrnFlag( true ),
+		mySizeFlag( true ),
+		plantLoopScanFlag( true ),
+		zoneEquipmentListChecked( false )
 	{}
 
 	// Destructor
@@ -204,6 +208,14 @@ public: // Data
 	Real64 supAirHeatingEnergy; // Total cooling energy from supply air [J]
 	Real64 supAirHeatingRate; // Total cooling rate from supply air [W]
 	Real64 primAirFlow; // supply air flow per zone [m3/s]
+
+private: // data
+
+	bool myEnvrnFlag;
+	bool mySizeFlag;
+	bool plantLoopScanFlag;
+	bool zoneEquipmentListChecked;
+
 
 }; // HVACFourPipeBeam
 
