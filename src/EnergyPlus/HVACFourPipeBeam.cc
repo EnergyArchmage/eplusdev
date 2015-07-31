@@ -614,14 +614,19 @@ namespace FourPipeBeam {
 						this->vDotDesignCW = this->vDotNormRatedCW * this->totBeamLength;
 					}
 				} else {
-					// should not come here
+					// should not come here, developer exception
 				}
+			} // no air flow rate
+		} // no beam length
 
+		if ( noHardSizeAnchorAvailable ) { // need to access sizing results to calculate sizes
+			if ( this->beamCoolingPresent ) {
+			
+			
 			}
-
+		
+		
 		}
-
-
 
 
 		CpAir = 0.0;
