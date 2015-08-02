@@ -1,6 +1,7 @@
 // C++ Headers
 #include <cassert>
 #include <cmath>
+#include <functional>
 
 // ObjexxFCL Headers
 #include <ObjexxFCL/Array.functions.hh>
@@ -45,6 +46,7 @@ namespace General {
 
 	// Using/Aliasing
 	using namespace DataPrecisionGlobals;
+	using namespace std::placeholders;
 
 	// Data
 	// This module should not contain variables in the module sense as it is

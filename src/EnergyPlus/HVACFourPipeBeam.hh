@@ -108,21 +108,12 @@ public: // Methods		MARK ANY THAT DON'T ALTER STATE const !!!
 
 	void
 	control(
-		int const ZoneNum, // number of zone being served
-		int const ZoneNodeNum, // zone node number
 		bool const FirstHVACIteration, // TRUE if 1st HVAC simulation of system timestep
 		Real64 & NonAirSysOutput // convective cooling by the beam system [W]
 	);
 
 	void
-	calc(
-		int const ZoneNode, // zone node number
-		Real64 const CWFlow, // chilled water flow [kg/s]
-		Real64 const HWFlow, // hot water flow [kg/s]
-		Real64 & LoadMet, // load met by unit [W]
-		Real64 & CWTempOut, // chilled water outlet temperature [C]
-		Real64 & HWTempOut, // hot water outlet temperature [C]
-	);
+	calc();
 
 	Real64
 	residual(
@@ -218,6 +209,18 @@ private: // data
 	bool plantLoopScanFlag;
 	bool zoneEquipmentListChecked;
 
+	int zoneIndex;
+	int zoneNodeIndex;
+	Real64 tDBZoneAirTemp;
+	Real64 tDBSystemAir;
+	Real64 mDotSystemAir;
+	Real64 cpZoneAir;
+	Real64 cpSystemAir;
+	Real64 qDotSystemAir;
+	Real64 qDotTotalDelivered;
+	Real64 qDotZoneReq;
+	Real64 qDotZoneToHeatSetPt;
+	Real64 qDotZoneToCoolSetPt;
 
 }; // HVACFourPipeBeam
 
