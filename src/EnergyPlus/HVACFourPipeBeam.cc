@@ -632,7 +632,43 @@ namespace FourPipeBeam {
 			} // no air flow rate
 		} // no beam length
 
-		if ( noHardSizeAnchorAvailable ) { // need to use sizing results to calculate anchor sizes
+		if ( noHardSizeAnchorAvailable && ( CurZoneEqNum > 0 ) ) { // need to use central sizing results to calculate 
+
+			// generate a set of first guesses is to 
+
+			CheckZoneSizing( this->unitType, this->name );
+			//base air flow rate on the terminal unit final zone size ( typically ventilation minimum and may be too low)
+			this->vDotDesignPrimAir = max(	TermUnitFinalZoneSizing( CurZoneEqNum ).DesCoolVolFlow, 
+											TermUnitFinalZoneSizing( CurZoneEqNum ).DesHeatVolFlow );
+			if ( this->vDotDesignPrimAir < SmallAirVolFlow ) {
+				//air was not a good guess then, probably sizing objects not set correctly, change to a length guess with no air flow
+				this->totBeamLength =  max( ( FinalZoneSizing( CurZoneEqNum ).DesCoolLoad / this->qDotNormRatedCooling ) ,
+											( FinalZoneSizing( CurZoneEqNum ).DesHeatLoad / this->qDotNormRatedHeating ) );
+
+				this->vDotDesignPrimAir = this->vDotNormRatedPrimAir * this->totBeamLength;
+
+				if ( this->vDotDesignCWWasAutosized ) {
+					this->vDotDesignCW = this->vDotNormRatedCW * this->totBeamLength;
+				}
+				if ( vDotDesignHWWasAutosized ) {
+					this->vDotDesignHW = this->vDotNormRatedHW * this->totBeamLength;
+				}
+			} else {
+				this->totBeamLength = this->vDotDesignPrimAir / this->vDotNormRatedPrimAir;
+				if ( this->vDotDesignCWWasAutosized ) {
+					this->vDotDesignCW = this->vDotNormRatedCW * this->totBeamLength;
+				}
+				if ( vDotDesignHWWasAutosized ) {
+					this->vDotDesignHW = this->vDotNormRatedHW * this->totBeamLength;
+				}
+			}
+			int iter;
+			Real64 deltaLengthX = 1.0;
+			for ( iter = 1; iter <= 100; ++iter ) {
+
+
+				
+			}
 			if ( this->beamCoolingPresent ) {
 			
 			
