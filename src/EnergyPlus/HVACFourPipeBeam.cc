@@ -40,7 +40,7 @@ namespace FourPipeBeam {
 
 	Array1D< std::shared_ptr< HVACFourPipeBeam > > FourPipeBeams; // dimension to number of machines
 
-	HVACFourPipeBeam::HVACFourPipeBeam(){}
+//	HVACFourPipeBeam::HVACFourPipeBeam(){}
 
 	std::shared_ptr< AirTerminalUnit > 
 	HVACFourPipeBeam::fourPipeBeamFactory(
@@ -117,7 +117,7 @@ namespace FourPipeBeam {
 		} else {
 			thisBeam->airAvailSchedNum = GetScheduleIndex( cAlphaArgs( 2 ) ); // convert schedule name to pointer
 			if ( thisBeam->airAvailSchedNum  == 0 ) {
-				ShowSevereError( routineName + cCurrentModuleObject + ": invalid " + cAlphaFields( 2 ) + " entered =" + cAlphaArgs( 2 ) + " for " + cAlphaFieldNames( 1 ) + '=' + cAlphaArgs( 1 ) );
+				ShowSevereError( routineName + cCurrentModuleObject + ": invalid " + cAlphaFieldNames( 2 ) + " entered =" + cAlphaArgs( 2 ) + " for " + cAlphaFieldNames( 1 ) + '=' + cAlphaArgs( 1 ) );
 				ErrorsFound = true;
 			}
 		}
@@ -229,15 +229,15 @@ namespace FourPipeBeam {
 			ErrorsFound = true;
 		}
 		// Register component set data
-		TestCompSet( cCurrentModuleObject, thisBeam->name, NodeID( thisBeam->airInNodeNum ), 
-						NodeID( thisBeam->airOutNodeNum ), "Air Nodes" );
+		TestCompSet( cCurrentModuleObject, thisBeam->name, DataLoopNode::NodeID( thisBeam->airInNodeNum ), 
+						DataLoopNode::NodeID( thisBeam->airOutNodeNum ), "Air Nodes" );
 		if ( thisBeam->beamCoolingPresent ) {
-			TestCompSet( cCurrentModuleObject, thisBeam->name, NodeID( thisBeam->cWInNodeNum ),
-						NodeID( thisBeam->cWOutNodeNum ), "Water Nodes" );
+			TestCompSet( cCurrentModuleObject, thisBeam->name, DataLoopNode::NodeID( thisBeam->cWInNodeNum ),
+						DataLoopNode::NodeID( thisBeam->cWOutNodeNum ), "Water Nodes" );
 		}
 		if ( thisBeam->beamHeatingPresent ) {
-			TestCompSet( cCurrentModuleObject, thisBeam->name, NodeID( thisBeam->hWInNodeNum ),
-						NodeID( thisBeam->hWOutNodeNum ), "Water Nodes" );
+			TestCompSet( cCurrentModuleObject, thisBeam->name, DataLoopNode::NodeID( thisBeam->hWInNodeNum ),
+						DataLoopNode::NodeID( thisBeam->hWOutNodeNum ), "Water Nodes" );
 		}
 
 		//Setup the Cooled Beam reporting variables
@@ -268,7 +268,7 @@ namespace FourPipeBeam {
 
 		// Fill the Zone Equipment data with the supply air inlet node number of this unit.
 		airNodeFound = false;
-		for ( ctrlZone = 1; ctrlZone <= NumOfZones; ++ctrlZone ) {
+		for ( ctrlZone = 1; ctrlZone <= DataGlobals::NumOfZones; ++ctrlZone ) {
 			if ( ! ZoneEquipConfig( ctrlZone ).IsControlled ) continue;
 			for ( supAirIn = 1; supAirIn <= ZoneEquipConfig( ctrlZone ).NumInletNodes; ++supAirIn ) {
 				if ( thisBeam->airOutNodeNum == ZoneEquipConfig( ctrlZone ).InletNode( supAirIn ) ) {
@@ -298,7 +298,7 @@ namespace FourPipeBeam {
 		// assumes if there isn't one assigned, it's an error
 		if ( thisBeam->aDUNum == 0 ) {
 			ShowSevereError( routineName + "No matching Air Distribution Unit, for Unit = [" + cCurrentModuleObject + ',' + thisBeam->name + "]." );
-			ShowContinueError( "...should have outlet node=" + NodeID( thisBeam->airOutNodeNum ) );
+			ShowContinueError( "...should have outlet node=" + DataLoopNode::NodeID( thisBeam->airOutNodeNum ) );
 			//          ErrorsFound=.TRUE.
 		}
 
@@ -782,66 +782,6 @@ namespace FourPipeBeam {
 
 
 
-
-		if ( this->totBeamLengthWasAutosized ) {
-
-			if ( CurZoneEqNum > 0 ) {
-
-				CheckZoneSizing( this->unitType, this->name );
-
-				if ( pltSizCoolNum > 0 ) {
-					rho = GetDensityGlycol( PlantLoop( CoolBeam( CBNum ).CWLoopNum ).FluidName, InitConvTemp, PlantLoop( CoolBeam( CBNum ).CWLoopNum ).FluidIndex, RoutineName );
-
-					Cp = GetSpecificHeatGlycol( PlantLoop( CoolBeam( CBNum ).CWLoopNum ).FluidName, InitConvTemp, PlantLoop( CoolBeam( CBNum ).CWLoopNum ).FluidIndex, RoutineName );
-					DesCoilLoad = CoolBeam( CBNum ).MaxCoolWaterVolFlow * ( CoolBeam( CBNum ).DesOutletWaterTemp - CoolBeam( CBNum ).DesInletWaterTemp ) * Cp * rho;
-					if ( DesCoilLoad > 0.0 ) {
-						DesLoadPerBeam = DesCoilLoad / NumBeams;
-						DesAirFlowPerBeam = CoolBeam( CBNum ).MaxAirVolFlow / NumBeams;
-						WaterVolFlowPerBeam = CoolBeam( CBNum ).MaxCoolWaterVolFlow / NumBeams;
-						WaterVel = WaterVolFlowPerBeam / ( Pi * pow_2( CoolBeam( CBNum ).InDiam ) / 4.0 );
-						if ( FinalZoneSizing( CurZoneEqNum ).ZoneTempAtCoolPeak > 0.0 ) {
-							DT = FinalZoneSizing( CurZoneEqNum ).ZoneTempAtCoolPeak - 0.5 * ( CoolBeam( CBNum ).DesInletWaterTemp + CoolBeam( CBNum ).DesOutletWaterTemp );
-							if ( DT <= 0.0 ) {
-								DT = 7.8;
-							}
-						} else {
-							DT = 7.8;
-						}
-						LengthX = 1.0;
-						for ( Iter = 1; Iter <= 100; ++Iter ) {
-							IndAirFlowPerBeamL = CoolBeam( CBNum ).K1 * std::pow( DT, CoolBeam( CBNum ).n ) + CoolBeam( CBNum ).Kin * DesAirFlowPerBeam / LengthX;
-							ConvFlow = ( IndAirFlowPerBeamL / CoolBeam( CBNum ).a0 ) * RhoAir;
-							if ( WaterVel > MinWaterVel ) {
-								K = CoolBeam( CBNum ).a * std::pow( DT, CoolBeam( CBNum ).n1 ) * std::pow( ConvFlow, CoolBeam( CBNum ).n2 ) * std::pow( WaterVel, CoolBeam( CBNum ).n3 );
-							} else {
-								K = CoolBeam( CBNum ).a * std::pow( DT, CoolBeam( CBNum ).n1 ) * std::pow( ConvFlow, CoolBeam( CBNum ).n2 ) * std::pow( MinWaterVel, CoolBeam( CBNum ).n3 ) * ( WaterVel / MinWaterVel );
-							}
-							Length = DesLoadPerBeam / ( K * CoolBeam( CBNum ).CoilArea * DT );
-							if ( CoolBeam( CBNum ).Kin <= 0.0 ) break;
-							// Check for convergence
-							if ( std::abs( Length - LengthX ) > 0.01 ) {
-								// New guess for length
-								LengthX += 0.5 * ( Length - LengthX );
-							} else {
-								break; // convergence achieved
-							}
-						}
-					} else {
-						Length = 0.0;
-					}
-					CoolBeam( CBNum ).BeamLength = Length;
-					CoolBeam( CBNum ).BeamLength = max( CoolBeam( CBNum ).BeamLength, 1.0 );
-					ReportSizingOutput( CoolBeam( CBNum ).UnitType, CoolBeam( CBNum ).Name, "Beam Length [m]", CoolBeam( CBNum ).BeamLength );
-				} else {
-					ShowSevereError( "Autosizing of cooled beam length requires a cooling loop Sizing:Plant object" );
-					ShowContinueError( "Occurs in" + CoolBeam( CBNum ).UnitType + " Object=" + CoolBeam( CBNum ).Name );
-					ErrorsFound = true;
-				}
-
-			}
-
-		}
-
 		// now test calculation running the full model
 
 
@@ -887,7 +827,7 @@ namespace FourPipeBeam {
 		using namespace DataZoneEnergyDemands;
 		using General::SolveRegulaFalsi;
 		using PlantUtilities::SetComponentFlowRate;
-
+		using namespace std::placeholders;
 		// Locals
 		// SUBROUTINE ARGUMENT DEFINITIONS:
 
@@ -971,7 +911,7 @@ namespace FourPipeBeam {
 			if ( this->qDotBeamCooling < ( qDotBeamReq - DataHVACGlobals::SmallLoad ) ) {
 				// can overcool, modulate chilled water flow rate to meet load
 				ErrTolerance = 0.01;
-				SolveRegulaFalsi( ErrTolerance, 50, SolFlag, this->mDotCW, std::bind( &HVACFourPipeBeam::residualCooling, this ), 0.0, this->mDotDesignCW);
+				SolveRegulaFalsi( ErrTolerance, 50, SolFlag, this->mDotCW, std::bind( &HVACFourPipeBeam::residualCooling, this, _1  ), 0.0, this->mDotDesignCW );
 				if ( SolFlag == -1 ) {
 					ShowWarningError( "Cold water control failed in four pipe beam unit called " + this->name );
 					ShowContinueError( "  Iteration limit exceeded in calculating cold water mass flow rate" );
@@ -1000,7 +940,7 @@ namespace FourPipeBeam {
 			if ( this->qDotBeamHeating > ( qDotBeamReq + DataHVACGlobals::SmallLoad ) ) {
 				// can overheat, modulate hot water flow to meet load
 				ErrTolerance = 0.01;
-				SolveRegulaFalsi( ErrTolerance, 50, SolFlag, this->mDotHW, std::bind( &HVACFourPipeBeam::residualHeating, this ), 0.0, this->mDotDesignHW);
+				SolveRegulaFalsi( ErrTolerance, 50, SolFlag, this->mDotHW, std::bind( &HVACFourPipeBeam::residualHeating, this , _1), 0.0, this->mDotDesignHW);
 				if ( SolFlag == -1 ) {
 					ShowWarningError( "Hot water control failed in four pipe beam unit called " + this->name );
 					ShowContinueError( "  Iteration limit exceeded in calculating cold water mass flow rate" );

@@ -100,7 +100,7 @@ public: // Methods		REMOVE ANY OF THESE THAT AREN'T COMMON (WITH SAME ARGS) TO A
 
 	virtual
 	void
-	update() = 0;
+	update() const = 0;
 
 	virtual
 	void

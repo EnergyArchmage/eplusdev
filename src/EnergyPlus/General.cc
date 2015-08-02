@@ -48,6 +48,7 @@ namespace General {
 	using namespace DataPrecisionGlobals;
 	using namespace std::placeholders;
 
+
 	// Data
 	// This module should not contain variables in the module sense as it is
 	// intended strictly to provide "interfaces" to routines used by other
