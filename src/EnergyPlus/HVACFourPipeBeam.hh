@@ -116,10 +116,13 @@ public: // Methods		MARK ANY THAT DON'T ALTER STATE const !!!
 	calc();
 
 	Real64
-	residual(
-		Real64 const cWaterFlow, // chilled water flow rate in kg/s
-		Real64 const hWaterFlow,
-		Array1< Real64 > const & Par
+	residualCooling(
+		Real64 const cWaterFlow // chilled water flow rate in kg/s
+	);
+
+	Real64
+	residualHeating(
+		Real64 const hWaterFlow // hot water flow rate in kg/s
 	);
 
 	void
@@ -131,7 +134,7 @@ public: // Methods		MARK ANY THAT DON'T ALTER STATE const !!!
 	);
 
 	void
-	update();
+	update() const;
 
 	void
 	report() ;
@@ -193,14 +196,14 @@ public: // Data
 	int beamHWOutletTempReSimIndex;
 	// output variables
 	Real64 beamCoolingEnergy; // beam sensible cooling energy of all beams in the zone [J]
-	Real64 beamCoolingRate; // beam sensible cooling rate of all beams in the zone [W]
+	Real64 beamCoolingRate; // beam sensible cooling rate of all beams in the zone (positive convention) [W]
 	Real64 beamHeatingEnergy; // beam heating energy of all beams in the zone [J]
 	Real64 beamHeatingRate; // beam heating rate of all beams in the zone [W]
 	Real64 supAirCoolingEnergy; // Total cooling energy from supply air [J]
 	Real64 supAirCoolingRate; // Total cooling rate from supply air [W]
 	Real64 supAirHeatingEnergy; // Total cooling energy from supply air [J]
 	Real64 supAirHeatingRate; // Total cooling rate from supply air [W]
-	Real64 primAirFlow; // supply air flow per zone [m3/s]
+	Real64 primAirFlow; // supply air flow per zone at standard elevation-adjusted density [m3/s]
 
 private: // data
 
@@ -217,8 +220,13 @@ private: // data
 	Real64 cpZoneAir;
 	Real64 cpSystemAir;
 	Real64 qDotSystemAir;
+	Real64 qDotBeamCoolingMax;
+	Real64 qDotBeamHeatingMax;
 	Real64 qDotTotalDelivered;
+	Real64 qDotBeamCooling;
+	Real64 qDotBeamHeating;
 	Real64 qDotZoneReq;
+	Real64 qDotBeamReq;
 	Real64 qDotZoneToHeatSetPt;
 	Real64 qDotZoneToCoolSetPt;
 
