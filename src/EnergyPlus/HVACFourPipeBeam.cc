@@ -324,11 +324,13 @@ namespace FourPipeBeam {
 	)
 	{
 
+		this->zoneNodeIndex = ZoneNodeNum;
+		this->zoneIndex  = ZoneNum;
 		// initialize the unit
 		this->init( FirstHVACIteration );
 
 		// control and simulate the beam
-		this->control(  ZoneNum, ZoneNodeNum, FirstHVACIteration, NonAirSysOutput );
+		this->control(  FirstHVACIteration, NonAirSysOutput );
 
 		// Update the current unit's outlet nodes. 
 		this->update();
@@ -469,12 +471,14 @@ namespace FourPipeBeam {
 			} else {
 				this->airAvailable = false;
 			}
-			if ( beamCoolingPresent && ( GetCurrentScheduleValue( this->coolingAvailSchedNum ) > 0.0) ) {
+			if ( this->airAvailable && beamCoolingPresent 
+				&& ( GetCurrentScheduleValue( this->coolingAvailSchedNum ) > 0.0) ) {
 				this->coolingAvailable = true;
 			} else {
 				this->coolingAvailable = false;
 			}
-			if ( beamHeatingPresent && ( GetCurrentScheduleValue( this->heatingAvailSchedNum ) > 0.0) ) {
+			if ( this->airAvailable && beamHeatingPresent && 
+				( GetCurrentScheduleValue( this->heatingAvailSchedNum ) > 0.0) ) {
 				this->heatingAvailable = true;
 			} else {
 				this->heatingAvailable = false;
@@ -502,6 +506,15 @@ namespace FourPipeBeam {
 		if ( beamHeatingPresent ) {
 			this->hWTempIn = Node( this->hWInNodeNum ).Temp;
 		}
+		this->mDotSystemAir = Node( this->airInNodeNum ).MassFlowRate;
+		this->tDBZoneAirTemp = Node( this->zoneNodeIndex ).Temp;
+		this->tDBSystemAir = Node( this->airInNodeNum ).Temp;
+		this->cpZoneAir = Psychrometrics::PsyCpAirFnWTdb(	Node( this->zoneNodeIndex ).HumRat, 
+															Node( this->zoneNodeIndex ).Temp );
+		this->cpSystemAir = Psychrometrics::PsyCpAirFnWTdb(	Node( this->airInNodeNum ).HumRat, 
+															Node( this->airInNodeNum ).Temp );
+		this->qDotBeamCooling = 0.0;
+		this->qDotBeamHeating = 0.0;
 		this->supAirCoolingRate = 0.0;
 		this->supAirHeatingRate = 0.0;
 		this->beamCoolingRate = 0.0;
@@ -619,7 +632,7 @@ namespace FourPipeBeam {
 			} // no air flow rate
 		} // no beam length
 
-		if ( noHardSizeAnchorAvailable ) { // need to access sizing results to calculate sizes
+		if ( noHardSizeAnchorAvailable ) { // need to use sizing results to calculate anchor sizes
 			if ( this->beamCoolingPresent ) {
 			
 			
@@ -800,7 +813,7 @@ namespace FourPipeBeam {
 
 		this->mDotNormRatedPrimAir = this->vDotNormRatedPrimAir * DataEnvironment::StdRhoAir; // convert to standard (elevation adjusted) mass flow rate
 
-		// report sizes if autosized
+		// report final sizes if autosized
 		if ( this->vDotDesignPrimAirWasAutosized ) {
 			ReportSizingOutput( this->unitType, this->name, "Supply Air Flow Rate [m3/s]", this->vDotDesignPrimAir );
 		}
@@ -814,10 +827,10 @@ namespace FourPipeBeam {
 			ReportSizingOutput( this->unitType, this->name, "Zone Total Beam Length [m]", this->totBeamLength);
 		}
 		// save the design water volumetric flow rate for use by the water loop sizing algorithms
-		if ( this->vDotDesignCW > 0.0 ) {
+		if ( this->vDotDesignCW > 0.0 && this->beamCoolingPresent ) {
 			RegisterPlantCompDesignFlow( this->cWInNodeNum, this->vDotDesignCW );
 		}
-		if ( this->vDotDesignHW > 0.0 ) {
+		if ( this->vDotDesignHW > 0.0 && this->beamHeatingPresent ) {
 			RegisterPlantCompDesignFlow( this->hWInNodeNum, this->vDotDesignHW );
 		}
 		if ( ErrorsFound ) {
@@ -827,30 +840,12 @@ namespace FourPipeBeam {
 	} //set_size
 
 	void
-	ControlFourPipeBeam(
-		int const CBNum, // number of the current unit being simulated
-		int const ZoneNum, // number of zone being served
-		int const ZoneNodeNum, // zone node number
+	HVACFourPipeBeam::control(
 		bool const EP_UNUSED( FirstHVACIteration ), // TRUE if 1st HVAC simulation of system timestep
 		Real64 & NonAirSysOutput // convective cooling by the beam system [W]
 	)
 	{
 
-		// SUBROUTINE INFORMATION:
-		//       AUTHOR         Fred Buhl
-		//       DATE WRITTEN   Feb 12, 2009
-		//       MODIFIED       na
-		//       RE-ENGINEERED  na
-
-		// PURPOSE OF THIS SUBROUTINE:
-		// Simulate a cooled beam unit;
-
-		// METHODOLOGY EMPLOYED:
-		// (1) From the zone load and the Supply air inlet conditions calculate the beam load
-		// (2) If there is a beam load, vary the water flow rate to match the beam load
-
-		// REFERENCES:
-		// na
 
 		// Using/Aliasing
 		using namespace DataZoneEnergyDemands;
@@ -870,20 +865,10 @@ namespace FourPipeBeam {
 		// na
 
 		// SUBROUTINE LOCAL VARIABLE DECLARATIONS:
-		Real64 QZnReq; // heating or cooling needed by zone [Watts]
-		Real64 QToHeatSetPt; // [W]  remaining load to heating setpoint
-		Real64 QToCoolSetPt; // [W]  remaining load to cooling setpoint
-		static Real64 QMin( 0.0 ); // cooled beam output at minimum water flow [W]
-		static Real64 QMax( 0.0 ); // cooled beam output at maximum water flow [W]
-		static Real64 QSup( 0.0 ); // heating or cooling by supply air [W]
-		static Real64 PowerMet( 0.0 ); // power supplied
-		static Real64 CWFlow( 0.0 ); // cold water flow [kg/s]
-		static Real64 AirMassFlow( 0.0 ); // air mass flow rate for the cooled beam system [kg/s]
-		static Real64 MaxColdWaterFlow( 0.0 ); // max water mass flow rate for the cooled beam system [kg/s]
-		static Real64 MinColdWaterFlow( 0.0 ); // min water mass flow rate for the cooled beam system [kg/s]
-		static Real64 CpAirZn( 0.0 ); // specific heat of air at zone conditions [J/kg-C]
-		static Real64 CpAirSys( 0.0 ); // specific heat of air at supply air conditions [J/kg-C]
-		static Real64 TWOut( 0.0 ); // outlet water tamperature [C]
+		bool dOASMode = false ; // true if unit is operating as DOAS terminal with no heating or cooling by beam
+		bool coolMode = false ; // true if unit is operating with some beam cooling
+		bool heatMode = false ; // true if unit is operating with some beam heating
+
 		int ControlNode; // the water inlet node
 		int InAirNode; // the air inlet node
 		bool UnitOn; // TRUE if unit is on
@@ -891,108 +876,132 @@ namespace FourPipeBeam {
 		int SolFlag;
 		Real64 ErrTolerance;
 
-		UnitOn = true;
-		PowerMet = 0.0;
-		InAirNode = CoolBeam( CBNum ).AirInNode;
-		ControlNode = CoolBeam( CBNum ).CWInNode;
-		AirMassFlow = Node( InAirNode ).MassFlowRateMaxAvail;
-		QZnReq = ZoneSysEnergyDemand( ZoneNum ).RemainingOutputRequired;
-		QToHeatSetPt = ZoneSysEnergyDemand( ZoneNum ).RemainingOutputReqToHeatSP;
-		QToCoolSetPt = ZoneSysEnergyDemand( ZoneNum ).RemainingOutputReqToCoolSP;
-		CpAirZn = PsyCpAirFnWTdb( Node( ZoneNodeNum ).HumRat, Node( ZoneNodeNum ).Temp );
-		CpAirSys = PsyCpAirFnWTdb( Node( InAirNode ).HumRat, Node( InAirNode ).Temp );
-		MaxColdWaterFlow = CoolBeam( CBNum ).MaxCoolWaterMassFlow;
-		SetComponentFlowRate( MaxColdWaterFlow, CoolBeam( CBNum ).CWInNode, CoolBeam( CBNum ).CWOutNode, CoolBeam( CBNum ).CWLoopNum, CoolBeam( CBNum ).CWLoopSideNum, CoolBeam( CBNum ).CWBranchNum, CoolBeam( CBNum ).CWCompNum );
-		MinColdWaterFlow = 0.0;
-		SetComponentFlowRate( MinColdWaterFlow, CoolBeam( CBNum ).CWInNode, CoolBeam( CBNum ).CWOutNode, CoolBeam( CBNum ).CWLoopNum, CoolBeam( CBNum ).CWLoopSideNum, CoolBeam( CBNum ).CWBranchNum, CoolBeam( CBNum ).CWCompNum );
+		NonAirSysOutput = 0.0; // initialize
 
-		if ( GetCurrentScheduleValue( CoolBeam( CBNum ).SchedPtr ) <= 0.0 ) UnitOn = false;
-		if ( MaxColdWaterFlow <= SmallMassFlow ) UnitOn = false;
+		if ( ! this->airAvailable  && ! this->coolingAvailable && ! this->heatingAvailable) { //unit is off
+			this->mDotHW = 0.0;
+			SetComponentFlowRate(this->mDotHW, this->hWInNodeNum, this->hWOutNodeNum, this->hWLocation.LoopNum, 
+								this->hWLocation.LoopSideNum, this->hWLocation.BranchNum, this->hWLocation.CompNum );
+			this->hWTempOut = this->hWTempIn;
+			// assume if there is still flow that unit has an internal bypass and convector does not still heat
+			this->mDotCW = 0.0;
+			this->cWTempOut = this->cWTempIn;
+			SetComponentFlowRate(this->mDotCW, this->cWInNodeNum, this->cWOutNodeNum, this->cWLocation.LoopNum, 
+								this->cWLocation.LoopSideNum, this->cWLocation.BranchNum, this->cWLocation.CompNum );
+			// assume if there is still flow that unit has an internal bypass and convector does not still cool
+			// don't even need to run calc
+			return;
+		}
 
-		// Set the unit's air inlet nodes mass flow rates
-		Node( InAirNode ).MassFlowRate = AirMassFlow;
-		// set the air volumetric flow rate per beam
-		CoolBeam( CBNum ).BeamFlow = Node( InAirNode ).MassFlowRate / ( StdRhoAir * CoolBeam( CBNum ).NumBeams );
-		// fire the unit at min water flow
-		CalcCoolBeam( CBNum, ZoneNodeNum, MinColdWaterFlow, QMin, TWOut );
-		// cooling by supply air
-		QSup = AirMassFlow * ( CpAirSys * Node( InAirNode ).Temp - CpAirZn * Node( ZoneNodeNum ).Temp );
-		// load on the beams is QToCoolSetPt-QSup
-		if ( UnitOn ) {
-			if ( ( QToCoolSetPt - QSup ) < -SmallLoad ) {
-				// There is a cooling demand on the cooled beam system.
-				// First, see if the system can meet the load
-				CalcCoolBeam( CBNum, ZoneNodeNum, MaxColdWaterFlow, QMax, TWOut );
-				if ( ( QMax < QToCoolSetPt - QSup - SmallLoad ) && ( QMax != QMin ) ) {
-					// The cooled beam system can meet the demand.
-					// Set up the iterative calculation of chilled water flow rate
-					Par( 1 ) = double( CBNum );
-					Par( 2 ) = double( ZoneNodeNum );
-					Par( 3 ) = QToCoolSetPt - QSup; // load to be met by the beams
-					Par( 4 ) = QMin;
-					Par( 5 ) = QMax;
-					ErrTolerance = 0.01;
-					SolveRegulaFalsi( ErrTolerance, 50, SolFlag, CWFlow, CoolBeamResidual, MinColdWaterFlow, MaxColdWaterFlow, Par );
-					if ( SolFlag == -1 ) {
-						ShowWarningError( "Cold water control failed in cooled beam unit " + CoolBeam( CBNum ).Name );
-						ShowContinueError( "  Iteration limit exceeded in calculating cold water mass flow rate" );
-					} else if ( SolFlag == -2 ) {
-						ShowWarningError( "Cold water control failed in cooled beam unit " + CoolBeam( CBNum ).Name );
-						ShowContinueError( "  Bad cold water flow limits" );
-					}
-				} else {
-					// unit maxed out
-					CWFlow = MaxColdWaterFlow;
+
+		if ( this->airAvailable && this->mDotSystemAir > 0.0 && ! this->coolingAvailable && ! this->heatingAvailable) {
+			dOASMode = true;
+			this->mDotHW = 0.0;
+			SetComponentFlowRate(this->mDotHW, this->hWInNodeNum, this->hWOutNodeNum, this->hWLocation.LoopNum, 
+								this->hWLocation.LoopSideNum, this->hWLocation.BranchNum, this->hWLocation.CompNum );
+			// assume if there is still flow that unit has an internal bypass and convector does not still heat
+			this->hWTempOut = this->hWTempIn;
+			this->mDotCW = 0.0;
+			SetComponentFlowRate(this->mDotCW, this->cWInNodeNum, this->cWOutNodeNum, this->cWLocation.LoopNum, 
+								this->cWLocation.LoopSideNum, this->cWLocation.BranchNum, this->cWLocation.CompNum );
+			// assume if there is still flow that unit has an internal bypass and convector does not still cool
+			this->cWTempOut = this->cWTempIn;
+			this->calc();
+			
+			return;
+		}
+
+
+
+		// get zone loads
+		this->qDotZoneReq         = ZoneSysEnergyDemand( this->zoneIndex ).RemainingOutputRequired;
+		this->qDotZoneToHeatSetPt = ZoneSysEnergyDemand( this->zoneIndex ).RemainingOutputReqToHeatSP;
+		this->qDotZoneToCoolSetPt = ZoneSysEnergyDemand( this->zoneIndex ).RemainingOutputReqToCoolSP;
+
+		// decide if beam is in heating or cooling
+
+		this->qDotSystemAir = this->mDotSystemAir*( (this->cpSystemAir * this->tDBSystemAir) - (this->cpZoneAir * this->tDBZoneAirTemp) );
+
+		this->qDotBeamReq = this->qDotZoneReq - this->qDotSystemAir;
+
+		if ( this->qDotBeamReq < - DataHVACGlobals::SmallLoad && this->coolingAvailable ){ // beam cooling needed
+			// first calc with max chilled water flow
+			this->mDotHW = 0.0;
+			SetComponentFlowRate(this->mDotHW, this->hWInNodeNum, this->hWOutNodeNum, this->hWLocation.LoopNum, 
+								this->hWLocation.LoopSideNum, this->hWLocation.BranchNum, this->hWLocation.CompNum );
+			this->hWTempOut = this->hWTempIn;
+			this->mDotCW = this->mDotDesignCW;
+			this->calc();
+			if ( this->qDotBeamCooling < ( qDotBeamReq - DataHVACGlobals::SmallLoad ) ) {
+				// can overcool, modulate chilled water flow rate to meet load
+				ErrTolerance = 0.01;
+				SolveRegulaFalsi( ErrTolerance, 50, SolFlag, this->mDotCW, std::bind( &HVACFourPipeBeam::residualCooling, this ), 0.0, this->mDotDesignCW);
+				if ( SolFlag == -1 ) {
+					ShowWarningError( "Cold water control failed in four pipe beam unit called " + this->name );
+					ShowContinueError( "  Iteration limit exceeded in calculating cold water mass flow rate" );
+				} else if ( SolFlag == -2 ) {
+					ShowWarningError( "Cold water control failed in cooled beam unit called " + this->name );
+					ShowContinueError( "  Bad cold water flow limits" );
 				}
-			} else {
-				// unit has no load
-				CWFlow = MinColdWaterFlow;
+				this->calc();
+				NonAirSysOutput = this->qDotBeamCooling;
+				return;
+			} else { // can run flat out without overcooling, which we just did
+				NonAirSysOutput = this->qDotBeamCooling;
+				return;
+			
 			}
-		} else {
-			// unit Off
-			CWFlow = MinColdWaterFlow;
-		}
-		// Get the cooling output at the chosen water flow rate
-		CalcCoolBeam( CBNum, ZoneNodeNum, CWFlow, PowerMet, TWOut );
-		CoolBeam( CBNum ).BeamCoolingRate = -PowerMet;
-		if ( QSup < 0.0 ) {
-			CoolBeam( CBNum ).SupAirCoolingRate = std::abs( QSup );
-		} else {
-			CoolBeam( CBNum ).SupAirHeatingRate = QSup;
-		}
-		CoolBeam( CBNum ).CoolWaterMassFlow = Node( ControlNode ).MassFlowRate;
-		CoolBeam( CBNum ).TWOut = TWOut;
-		CoolBeam( CBNum ).EnthWaterOut = Node( ControlNode ).Enthalpy + CoolBeam( CBNum ).BeamCoolingRate;
-		//  Node(ControlNode)%MassFlowRate = CWFlow
-		NonAirSysOutput = PowerMet;
 
+
+		} else if ( qDotBeamReq > DataHVACGlobals::SmallLoad && this->heatingAvailable ){ // beam heating needed
+			// first calc with max hot water flow
+			this->mDotCW = 0.0;
+			SetComponentFlowRate(this->mDotCW, this->cWInNodeNum, this->cWOutNodeNum, this->cWLocation.LoopNum, 
+								this->cWLocation.LoopSideNum, this->cWLocation.BranchNum, this->cWLocation.CompNum );
+			this->cWTempOut = this->cWTempIn;
+			this->mDotHW = this->mDotDesignHW;
+			this->calc();
+			if ( this->qDotBeamHeating > ( qDotBeamReq + DataHVACGlobals::SmallLoad ) ) {
+				// can overheat, modulate hot water flow to meet load
+				ErrTolerance = 0.01;
+				SolveRegulaFalsi( ErrTolerance, 50, SolFlag, this->mDotHW, std::bind( &HVACFourPipeBeam::residualHeating, this ), 0.0, this->mDotDesignHW);
+				if ( SolFlag == -1 ) {
+					ShowWarningError( "Hot water control failed in four pipe beam unit called " + this->name );
+					ShowContinueError( "  Iteration limit exceeded in calculating cold water mass flow rate" );
+				} else if ( SolFlag == -2 ) {
+					ShowWarningError( "Hot water control failed in four pipe beam called " + this->name );
+					ShowContinueError( "  Bad cold water flow limits" );
+				}
+				this->calc();
+				NonAirSysOutput = this->qDotBeamHeating;
+				return;
+			
+			} else { // can run flat out without overheating, which we just did
+				NonAirSysOutput = this->qDotBeamHeating;
+				return;
+			
+			}
+
+		} else {
+			this->mDotHW = 0.0;
+			SetComponentFlowRate(this->mDotHW, this->hWInNodeNum, this->hWOutNodeNum, this->hWLocation.LoopNum, 
+								this->hWLocation.LoopSideNum, this->hWLocation.BranchNum, this->hWLocation.CompNum );
+			this->hWTempOut = this->hWTempIn;
+			// assume if there is still flow that unit has an internal bypass and convector does not still heat
+			this->mDotCW = 0.0;
+			this->cWTempOut = this->cWTempIn;
+			SetComponentFlowRate(this->mDotCW, this->cWInNodeNum, this->cWOutNodeNum, this->cWLocation.LoopNum, 
+								this->cWLocation.LoopSideNum, this->cWLocation.BranchNum, this->cWLocation.CompNum );
+			// assume if there is still flow that unit has an internal bypass and convector does not still cool
+			// don't even need to run calc
+			return;
+		}
+
+		return;
 	}
 
 	void
-	CalcFourPipeBeam(
-		int const CBNum, // Unit index
-		int const ZoneNode, // zone node number
-		Real64 const CWFlow, // cold water flow [kg/s]
-		Real64 & LoadMet, // load met by unit [W]
-		Real64 & TWOut // chilled water outlet temperature [C]
-	)
-	{
-
-		// SUBROUTINE INFORMATION:
-		//       AUTHOR         Fred Buhl
-		//       DATE WRITTEN   Feb 2009
-		//       MODIFIED       na
-		//       RE-ENGINEERED  na
-
-		// PURPOSE OF THIS SUBROUTINE:
-		// Simulate a cooled beam given the chilled water flow rate
-
-		// METHODOLOGY EMPLOYED:
-		// Uses the cooled beam equations; iteratively varies water outlet  temperature
-		// until air-side and water-side cooling outputs match.
-
-		// REFERENCES:
-		// na
+	HVACFourPipeBeam::calc(){
 
 		// Using/Aliasing
 		using PlantUtilities::SetComponentFlowRate;
@@ -1004,7 +1013,7 @@ namespace FourPipeBeam {
 		// SUBROUTINE ARGUMENT DEFINITIONS:
 
 		// SUBROUTINE PARAMETER DEFINITIONS:
-		static std::string const RoutineName( "CalcCoolBeam" );
+		static std::string const routineName( "HVACFourPipeBeam::calc" );
 
 		// INTERFACE BLOCK SPECIFICATIONS
 		// na
@@ -1013,282 +1022,164 @@ namespace FourPipeBeam {
 		// na
 
 		// SUBROUTINE LOCAL VARIABLE DECLARATIONS:
-		static int Iter( 0 ); // TWOut iteration index
-		static Real64 TWIn( 0.0 ); // Inlet water temperature [C]
-		static Real64 ZTemp( 0.0 ); // zone air temperature [C]
-		static Real64 WaterCoolPower( 0.0 ); // cooling power from water side [W]
-		static Real64 DT( 0.0 ); // approximate air - water delta T [C]
-		static Real64 IndFlow( 0.0 ); // induced air flow rate per beam length [m3/s-m]
-		static Real64 CoilFlow( 0.0 ); // mass air flow rate of air passing through "coil" [kg/m2-s]
-		static Real64 WaterVel( 0.0 ); // water velocity [m/s]
-		static Real64 K( 0.0 ); // coil heat transfer coefficient [W/m2-K]
-		static Real64 AirCoolPower( 0.0 ); // cooling power from the air side [W]
-		Real64 Diff; // difference between water side cooling power and air side cooling power [W]
-		static Real64 CWFlowPerBeam( 0.0 ); // water mass flow rate per beam
-		static Real64 Coeff( 0.0 ); // iteration parameter
-		static Real64 Delta( 0.0 );
-		static Real64 mdot( 0.0 );
+		Real64 fModCoolCWMdot; //Cooling capacity modification factor function of chilled water flow rate
+		Real64 fModCoolDeltaT; //Cooling capacity modification factor function of air-water temperature difference
+		Real64 fModCoolAirMdot; // Cooling capacity modification factor function of primary air flow rate
+		Real64 fModHeatHWMdot; //Heating capacity modification factor function of hot water flow rate
+		Real64 fModHeatDeltaT; //Heating capacity modification factor function of water - air temperature difference
+		Real64 fModHeatAirMdot; //Heating capacity modification factor function of primary air flow rate
 		Real64 Cp; // local fluid specific heat
 		Real64 rho; // local fluid density
 
-		//test CWFlow against plant
-		mdot = CWFlow;
+		this->qDotSystemAir = this->mDotSystemAir*( (this->cpSystemAir * this->tDBSystemAir) - (this->cpZoneAir * this->tDBZoneAirTemp) );
 
-		SetComponentFlowRate( mdot, CoolBeam( CBNum ).CWInNode, CoolBeam( CBNum ).CWOutNode, CoolBeam( CBNum ).CWLoopNum, CoolBeam( CBNum ).CWLoopSideNum, CoolBeam( CBNum ).CWBranchNum, CoolBeam( CBNum ).CWCompNum );
+		if ( this->coolingAvailable &&  this->mDotCW > 0.0 ) {
+			//test chilled water flow against plant, it might not all be available
+			SetComponentFlowRate(	this->mDotCW,
+									this->cWInNodeNum,
+									this->cWOutNodeNum,
+									this->cWLocation.LoopNum,
+									this->cWLocation.LoopSideNum,
+									this->cWLocation.BranchNum,
+									this->cWLocation.CompNum );
+			fModCoolCWMdot = CurveManager::CurveValue( this->modCoolingQdotCWFlowFuncNum, 
+										( ( this->mDotCW / this->totBeamLength )
+											/ this->mDotNormRatedCW ) );
+			fModCoolDeltaT = CurveManager::CurveValue( this->modCoolingQdotDeltaTFuncNum,
+										( ( this->tDBZoneAirTemp - this->cWTempIn )
+											/ this->deltaTempRatedCooling ) );
+			fModCoolAirMdot = CurveManager::CurveValue( this->modCoolingQdotAirFlowFuncNum,
+										( ( this->mDotSystemAir / this->totBeamLength )
+											/ this->mDotNormRatedPrimAir) );
+			this->qDotBeamCooling = -1.0 * this->qDotNormRatedCooling * fModCoolDeltaT * fModCoolAirMdot * fModCoolCWMdot * this->totBeamLength;
+			// TODO calculate leaving water temperature
 
-		CWFlowPerBeam = mdot / CoolBeam( CBNum ).NumBeams;
-		TWIn = CoolBeam( CBNum ).TWIn;
-
-		Cp = GetSpecificHeatGlycol( PlantLoop( CoolBeam( CBNum ).CWLoopNum ).FluidName, TWIn, PlantLoop( CoolBeam( CBNum ).CWLoopNum ).FluidIndex, RoutineName );
-
-		rho = GetDensityGlycol( PlantLoop( CoolBeam( CBNum ).CWLoopNum ).FluidName, TWIn, PlantLoop( CoolBeam( CBNum ).CWLoopNum ).FluidIndex, RoutineName );
-
-		TWOut = TWIn + 2.0;
-		ZTemp = Node( ZoneNode ).Temp;
-		if ( mdot <= 0.0 || TWIn <= 0.0 ) {
-			LoadMet = 0.0;
-			TWOut = TWIn;
-			return;
 		}
-		for ( Iter = 1; Iter <= 200; ++Iter ) {
-			if ( Iter > 50 && Iter < 100 ) {
-				Coeff = 0.1 * Coeff2;
-			} else if ( Iter > 100 ) {
-				Coeff = 0.01 * Coeff2;
-			} else {
-				Coeff = Coeff2;
-			}
-
-			WaterCoolPower = CWFlowPerBeam * Cp * ( TWOut - TWIn );
-			DT = max( ZTemp - 0.5 * ( TWIn + TWOut ), 0.0 );
-			IndFlow = CoolBeam( CBNum ).K1 * std::pow( DT, CoolBeam( CBNum ).n ) + CoolBeam( CBNum ).Kin * CoolBeam( CBNum ).BeamFlow / CoolBeam( CBNum ).BeamLength;
-			CoilFlow = ( IndFlow / CoolBeam( CBNum ).a0 ) * StdRhoAir;
-			WaterVel = CWFlowPerBeam / ( rho * Pi * pow_2( CoolBeam( CBNum ).InDiam ) / 4.0 );
-			if ( WaterVel > MinWaterVel ) {
-				K = CoolBeam( CBNum ).a * std::pow( DT, CoolBeam( CBNum ).n1 ) * std::pow( CoilFlow, CoolBeam( CBNum ).n2 ) * std::pow( WaterVel, CoolBeam( CBNum ).n3 );
-			} else {
-				K = CoolBeam( CBNum ).a * std::pow( DT, CoolBeam( CBNum ).n1 ) * std::pow( CoilFlow, CoolBeam( CBNum ).n2 ) * std::pow( MinWaterVel, CoolBeam( CBNum ).n3 ) * ( WaterVel / MinWaterVel );
-			}
-			AirCoolPower = K * CoolBeam( CBNum ).CoilArea * DT * CoolBeam( CBNum ).BeamLength;
-			Diff = WaterCoolPower - AirCoolPower;
-			Delta = TWOut * ( std::abs( Diff ) / Coeff );
-			if ( std::abs( Diff ) > 0.1 ) {
-				if ( Diff < 0.0 ) {
-					TWOut += Delta; // increase TWout
-					if ( TWOut > ZTemp ) { // check that water outlet temperature is less than zone temperature
-						WaterCoolPower = 0.0;
-						TWOut = ZTemp;
-						break;
-					}
-				} else {
-					TWOut -= Delta; // Decrease TWout
-					if ( TWOut < TWIn ) {
-						TWOut = TWIn;
-					}
-				}
-			} else {
-				// water and air side outputs have converged
-				break;
-			}
+		if ( this->heatingAvailable && this->mDotHW > 0.0 ){
+			//test hot water flow against plant, it might not all be available
+			SetComponentFlowRate(	this->mDotHW,
+									this->hWInNodeNum,
+									this->hWOutNodeNum,
+									this->hWLocation.LoopNum,
+									this->hWLocation.LoopSideNum,
+									this->hWLocation.BranchNum,
+									this->hWLocation.CompNum );
+			fModHeatHWMdot = CurveManager::CurveValue( this->modHeatingQdotHWFlowFuncNum, 
+										( ( this->mDotHW / this->totBeamLength )
+											/ this->mDotNormRatedHW ) );
+			fModHeatDeltaT = CurveManager::CurveValue( this->modHeatingQdotDeltaTFuncNum,
+										( (this->hWTempIn - this->tDBZoneAirTemp )
+											/ this->deltaTempRatedHeating ) );
+			fModHeatAirMdot = CurveManager::CurveValue( this->modHeatingQdotAirFlowFuncNum,
+										( ( this->mDotSystemAir / this->totBeamLength )
+											/ this->mDotNormRatedPrimAir) );
+			this->qDotBeamHeating = this->qDotNormRatedHeating * fModHeatDeltaT * fModHeatAirMdot * fModHeatHWMdot * this->totBeamLength;
+			// TODO calculate leaving water temperature
 		}
-		LoadMet = -WaterCoolPower * CoolBeam( CBNum ).NumBeams;
 
+		this->qDotTotalDelivered = this->qDotSystemAir + this->qDotBeamCooling + this->qDotBeamHeating;
 	}
 
-	Real64 FourPipeBeamResidual(
-		Real64 const CWFlow, // cold water flow rate in kg/s
-		Array1< Real64 > const & Par
+	Real64 HVACFourPipeBeam::residualCooling( 
+		Real64 const cWFlow // cold water flow rate in kg/s
 	)
 	{
 
-		// FUNCTION INFORMATION:
-		//       AUTHOR         Fred Buhl
-		//       DATE WRITTEN   February 2009
-		//       MODIFIED
-		//       RE-ENGINEERED
-
-		// PURPOSE OF THIS FUNCTION:
-		// Calculates residual function (Requested Unit Load - Unit Output) / Max Unit Output
-		// Unit Output depends on the cold water flow rate which is being varied to zero the residual.
-
-		// METHODOLOGY EMPLOYED:
-		// Calls CalcCoolBeam, and calculates the residual as defined above.
-
-		// REFERENCES:
-
-		// USE STATEMENTS:
-		// na
-
-		// Return value
 		Real64 Residuum; // residual to be minimized to zero
-
-		// Argument array dimensioning
-
-		// Locals
-		// SUBROUTINE ARGUMENT DEFINITIONS:
-
-		// FUNCTION PARAMETER DEFINITIONS:
-		// na
-
-		// INTERFACE BLOCK SPECIFICATIONS
-		// na
-
-		// DERIVED TYPE DEFINITIONS
-		// na
-
-		// FUNCTION LOCAL VARIABLE DECLARATIONS:
-		int CBIndex;
-		int ZoneNodeIndex;
-		static Real64 UnitOutput( 0.0 );
-		static Real64 TWOut( 0.0 );
-
-		CBIndex = int( Par( 1 ) );
-		ZoneNodeIndex = int( Par( 2 ) );
-		CalcCoolBeam( CBIndex, ZoneNodeIndex, CWFlow, UnitOutput, TWOut );
-		Residuum = ( Par( 3 ) - UnitOutput ) / ( Par( 5 ) - Par( 4 ) );
+		this->mDotHW = 0.0;
+		this->mDotCW = cWFlow;
+		this->calc();
+		Residuum = ( ( ( this->qDotZoneToCoolSetPt - this->qDotSystemAir )- this->qDotBeamCooling ) 
+						/ this->qDotBeamCoolingMax );
 
 		return Residuum;
 	}
-
-	void
-	UpdateCoolBeam( int const CBNum )
+	Real64 HVACFourPipeBeam::residualHeating( 
+		Real64 const hWFlow // hot water flow rate in kg/s
+	)
 	{
 
-		// SUBROUTINE INFORMATION:
-		//       AUTHOR         Fred Buhl
-		//       DATE WRITTEN   Feb 2009
-		//       MODIFIED       na
-		//       RE-ENGINEERED  na
+		Real64 Residuum; // residual to be minimized to zero
+		this->mDotHW = hWFlow;
+		this->mDotCW = 0.0;
+		this->calc();
+		Residuum = ( ( ( this->qDotZoneToHeatSetPt - this->qDotSystemAir ) - this->qDotBeamHeating ) 
+						/ this->qDotBeamHeatingMax );
 
-		// PURPOSE OF THIS SUBROUTINE:
-		// This subroutine updates the cooled beam unit outlet nodes
+		return Residuum;
+	}
+	void
+	HVACFourPipeBeam::update() const // update node date elsewhere in EnergyPlus, does not change state of this
+	{
 
-		// METHODOLOGY EMPLOYED:
-		// Data is moved from the cooled beam unit data structure to the unit outlet nodes.
-
-		// REFERENCES:
-		// na
-
-		// Using/Aliasing
 		using DataContaminantBalance::Contaminant;
 		using PlantUtilities::SafeCopyPlantNode;
 
-		// Locals
-		// SUBROUTINE ARGUMENT DEFINITIONS:
-
-		// SUBROUTINE PARAMETER DEFINITIONS:
-		// na
-
-		// INTERFACE BLOCK SPECIFICATIONS
-		// na
-
-		// DERIVED TYPE DEFINITIONS
-		// na
-
-		// SUBROUTINE LOCAL VARIABLE DECLARATIONS:
-		int AirInletNode;
-		int WaterInletNode;
-		int AirOutletNode;
-		int WaterOutletNode;
-
-		AirInletNode = CoolBeam( CBNum ).AirInNode;
-		WaterInletNode = CoolBeam( CBNum ).CWInNode;
-		AirOutletNode = CoolBeam( CBNum ).AirOutNode;
-		WaterOutletNode = CoolBeam( CBNum ).CWOutNode;
-
-		// Set the outlet air nodes of the unit; note that all quantities are unchanged
-		Node( AirOutletNode ).MassFlowRate = Node( AirInletNode ).MassFlowRate;
-		Node( AirOutletNode ).Temp = Node( AirInletNode ).Temp;
-		Node( AirOutletNode ).HumRat = Node( AirInletNode ).HumRat;
-		Node( AirOutletNode ).Enthalpy = Node( AirInletNode ).Enthalpy;
-
-		// Set the outlet water nodes for the unit
-		//  Node(WaterOutletNode)%MassFlowRate = CoolBeam(CBNum)%CoolWaterMassFlow
-		SafeCopyPlantNode( WaterInletNode, WaterOutletNode );
-
-		Node( WaterOutletNode ).Temp = CoolBeam( CBNum ).TWOut;
-		Node( WaterOutletNode ).Enthalpy = CoolBeam( CBNum ).EnthWaterOut;
-
-		// Set the air outlet nodes for properties that just pass through & not used
-		Node( AirOutletNode ).Quality = Node( AirInletNode ).Quality;
-		Node( AirOutletNode ).Press = Node( AirInletNode ).Press;
-		Node( AirOutletNode ).MassFlowRateMin = Node( AirInletNode ).MassFlowRateMin;
-		Node( AirOutletNode ).MassFlowRateMax = Node( AirInletNode ).MassFlowRateMax;
-		Node( AirOutletNode ).MassFlowRateMinAvail = Node( AirInletNode ).MassFlowRateMinAvail;
-		Node( AirOutletNode ).MassFlowRateMaxAvail = Node( AirInletNode ).MassFlowRateMaxAvail;
-
-		// Set the outlet nodes for properties that just pass through & not used
-		//  Node(WaterOutletNode)%Quality             = Node(WaterInletNode)%Quality
-		//  Node(WaterOutletNode)%Press               = Node(WaterInletNode)%Press
-		//  Node(WaterOutletNode)%HumRat              = Node(WaterInletNode)%HumRat
-		//  Node(WaterOutletNode)%MassFlowRateMin     = Node(WaterInletNode)%MassFlowRateMin
-		//  Node(WaterOutletNode)%MassFlowRateMax     = Node(WaterInletNode)%MassFlowRateMax
-		//  Node(WaterOutletNode)%MassFlowRateMinAvail= Node(WaterInletNode)%MassFlowRateMinAvail
-		//  Node(WaterOutletNode)%MassFlowRateMaxAvail= Node(WaterInletNode)%MassFlowRateMaxAvail
-
-		//  IF (CoolBeam(CBNum)%CoolWaterMassFlow.EQ.0.0) THEN
-		//    Node(WaterInletNode)%MassFlowRateMinAvail= 0.0
-		//    Node(WaterOutletNode)%MassFlowRateMinAvail= 0.0
-		//  END IF
+		// Set the outlet air nodes of the unit; note that all quantities are unchanged from inlet to outlet
+		DataLoopNode::Node( this->airOutNodeNum ).MassFlowRate = DataLoopNode::Node( this->airInNodeNum ).MassFlowRate;
+		DataLoopNode::Node( this->airOutNodeNum ).Temp = DataLoopNode::Node( this->airInNodeNum ).Temp;
+		DataLoopNode::Node( this->airOutNodeNum ).HumRat = DataLoopNode::Node( this->airInNodeNum ).HumRat;
+		DataLoopNode::Node( this->airOutNodeNum ).Enthalpy = DataLoopNode::Node( this->airInNodeNum ).Enthalpy;
+		DataLoopNode::Node( this->airOutNodeNum ).Quality = DataLoopNode::Node( this->airInNodeNum ).Quality;
+		DataLoopNode::Node( this->airOutNodeNum ).Press = DataLoopNode::Node( this->airInNodeNum ).Press;
+		DataLoopNode::Node( this->airOutNodeNum ).MassFlowRateMin = DataLoopNode::Node( this->airInNodeNum ).MassFlowRateMin;
+		DataLoopNode::Node( this->airOutNodeNum ).MassFlowRateMax = DataLoopNode::Node( this->airInNodeNum ).MassFlowRateMax;
+		DataLoopNode::Node( this->airOutNodeNum ).MassFlowRateMinAvail = DataLoopNode::Node( this->airInNodeNum ).MassFlowRateMinAvail;
+		DataLoopNode::Node( this->airOutNodeNum ).MassFlowRateMaxAvail = DataLoopNode::Node( this->airInNodeNum ).MassFlowRateMaxAvail;
 
 		if ( Contaminant.CO2Simulation ) {
-			Node( AirOutletNode ).CO2 = Node( AirInletNode ).CO2;
+			DataLoopNode::Node( this->airOutNodeNum ).CO2 = DataLoopNode::Node( this->airInNodeNum ).CO2;
 		}
 
 		if ( Contaminant.GenericContamSimulation ) {
-			Node( AirOutletNode ).GenContam = Node( AirInletNode ).GenContam;
+			DataLoopNode::Node( this->airOutNodeNum ).GenContam = DataLoopNode::Node( this->airInNodeNum ).GenContam;
+		}
+
+		// Set the outlet water nodes for the unit
+
+		if ( this-> beamCoolingPresent ) {
+			SafeCopyPlantNode( this->cWInNodeNum, this->cWOutNodeNum );
+			DataLoopNode::Node( this->cWOutNodeNum ).Temp = this->cWTempOut;
+		}
+		if ( this-> beamHeatingPresent ){
+			SafeCopyPlantNode( this->hWInNodeNum, this->hWOutNodeNum );
+			DataLoopNode::Node( this->hWOutNodeNum ).Temp = this->hWTempOut;
 		}
 
 	}
 
 	void
-	ReportCoolBeam( int const CBNum )
+	HVACFourPipeBeam::report( ) // fill out local output variables for reporting
 	{
-
-		// SUBROUTINE INFORMATION:
-		//       AUTHOR         Fred Buhl
-		//       DATE WRITTEN   Feb 2009
-		//       MODIFIED       na
-		//       RE-ENGINEERED  na
-
-		// PURPOSE OF THIS SUBROUTINE:
-		// This subroutine updates the report variable for the cooled beam units
-
-		// METHODOLOGY EMPLOYED:
-		// NA
-
-		// REFERENCES:
-		// na
-
-		// USE STATEMENTS:
-
-		// Locals
-		// SUBROUTINE ARGUMENT DEFINITIONS:
-
-		// SUBROUTINE PARAMETER DEFINITIONS:
-		// na
-
-		// INTERFACE BLOCK SPECIFICATIONS
-		// na
-
-		// DERIVED TYPE DEFINITIONS
-		// na
-
-		// SUBROUTINE LOCAL VARIABLE DECLARATIONS:
 
 		Real64 ReportingConstant;
 
-		ReportingConstant = TimeStepSys * SecInHour;
-		// report the WaterCoil energy from this component
-		CoolBeam( CBNum ).BeamCoolingEnergy = CoolBeam( CBNum ).BeamCoolingRate * ReportingConstant;
-		CoolBeam( CBNum ).SupAirCoolingEnergy = CoolBeam( CBNum ).SupAirCoolingRate * ReportingConstant;
-		CoolBeam( CBNum ).SupAirHeatingEnergy = CoolBeam( CBNum ).SupAirHeatingRate * ReportingConstant;
+		ReportingConstant = DataHVACGlobals::TimeStepSys * DataGlobals::SecInHour;
+		if ( this->beamCoolingPresent ) {
+			this->beamCoolingRate = std::abs( this->qDotBeamCooling ); // report var has positive sign convention
+			this->beamCoolingEnergy = this->beamCoolingRate * ReportingConstant;
+		}
+		if ( this-> beamHeatingPresent ) {
+			this->beamHeatingRate = this->qDotBeamHeating;
+			this->beamHeatingEnergy = this->beamHeatingRate * ReportingConstant;
+		}
+		if ( qDotSystemAir <= 0.0 ) { // cooling
+			this->supAirCoolingRate = std::abs( this->qDotSystemAir );
+			this->supAirHeatingRate = 0.0;
+		} else {
+			this->supAirHeatingRate = this->qDotSystemAir;
+			this->supAirCoolingRate = 0.0;
+		}
+		supAirCoolingEnergy = this->supAirCoolingRate * ReportingConstant;
+		supAirHeatingEnergy = this->supAirHeatingRate * ReportingConstant;
+
+		this->primAirFlow = this->mDotSystemAir / DataEnvironment::StdRhoAir;
 
 	}
 
 	//     NOTICE
 
-	//     Copyright © 1996-2014 The Board of Trustees of the University of Illinois
+	//     Copyright (c) 1996-2015 The Board of Trustees of the University of Illinois
 	//     and The Regents of the University of California through Ernest Orlando Lawrence
 	//     Berkeley National Laboratory.  All rights reserved.
 
@@ -1309,6 +1200,6 @@ namespace FourPipeBeam {
 
 	//     TRADEMARKS: EnergyPlus is a trademark of the US Department of Energy.
 
-} // HVACCooledBeam
+} // HVACFourPipeBeam
 
 } // EnergyPlus
