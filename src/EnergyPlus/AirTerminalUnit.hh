@@ -47,7 +47,9 @@ protected: // Creation
 		vDotDesignPrimAirWasAutosized( false ),
 		mDotDesignPrimAir( 0.0 ),
 		airInNodeNum( 0 ),
-		airOutNodeNum( 0 )
+		airOutNodeNum( 0 ),
+		zoneIndex( 0 ),
+		zoneNodeIndex( 0 )
 	{}
 
 	// Copy Constructor
@@ -68,7 +70,7 @@ public: // Creation
 protected: // Assignment
 
 	// Copy Assignment
-	operator =( AirTerminalUnit const & ) = default;
+//	operator =( AirTerminalUnit const & ) = default;
 
 	// Move Assignment
 #if !defined(_MSC_VER) || defined(__INTEL_COMPILER) || (_MSC_VER>=1900)
@@ -77,17 +79,6 @@ protected: // Assignment
 
 public: // Methods		REMOVE ANY OF THESE THAT AREN'T COMMON (WITH SAME ARGS) TO ALL SUB-TYPES
 
-
-
-	virtual
-	void
-	init(
-		bool const FirstHVACIteration // TRUE if first air loop solution this HVAC step         MAYBE THIS SHOULD HAVE A DEFAULT ARG OF = false
-	) = 0;
-
-	virtual
-	void
-	set_size() = 0;
 
 	virtual
 	void
@@ -98,13 +89,6 @@ public: // Methods		REMOVE ANY OF THESE THAT AREN'T COMMON (WITH SAME ARGS) TO A
 		Real64 & NonAirSysOutput // convective cooling by the beam system [W]
 	) = 0;
 
-	virtual
-	void
-	update() const = 0;
-
-	virtual
-	void
-	report() = 0;
 
 
 public: // Data
@@ -120,7 +104,8 @@ public: // Data
 	Real64 mDotDesignPrimAir; // Design primary air mass flow rate kg/s
 	int airInNodeNum; // unit air inlet system node number, air enters into air terminal unit
 	int airOutNodeNum; // unit air outlet system node number, air enters into zone from air terminal
-
+	int zoneIndex; // zone index for this air terminal unit
+	int zoneNodeIndex; // index in node structure for the zone node for this air terminal
 }; // AirTerminalUnit
 
 } // EnergyPlus

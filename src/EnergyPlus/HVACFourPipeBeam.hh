@@ -65,11 +65,6 @@ public: // Creation
 		hWInNodeNum( 0 ),
 		hWOutNodeNum( 0 ),
 		hWLocation( PlantLocation( 0, 0, 0, 0 ) ),
-		beamLoadReSimIndex( 0 ),
-		beamCWMassFlowReSimIndex( 0 ),
-		beamCWOutletTempReSimIndex( 0 ),
-		beamHWMassFlowReSimIndex( 0 ),
-		beamHWOutletTempReSimIndex( 0 ),
 		beamCoolingEnergy( 0.0 ),
 		beamCoolingRate( 0.0 ),
 		beamHeatingEnergy( 0.0 ),
@@ -82,7 +77,22 @@ public: // Creation
 		myEnvrnFlag( true ),
 		mySizeFlag( true ),
 		plantLoopScanFlag( true ),
-		zoneEquipmentListChecked( false )
+		zoneEquipmentListChecked( false ),
+		tDBZoneAirTemp( 0.0 ),
+		tDBSystemAir( 0.0 ),
+		mDotSystemAir( 0.0 ),
+		cpZoneAir( 0.0 ),
+		cpSystemAir( 0.0 ),
+		qDotSystemAir( 0.0 ),
+		qDotBeamCoolingMax( 0.0 ),
+		qDotBeamHeatingMax( 0.0 ),
+		qDotTotalDelivered( 0.0 ),
+		qDotBeamCooling( 0.0 ),
+		qDotBeamHeating( 0.0 ),
+		qDotZoneReq( 0.0 ),
+		qDotBeamReq( 0.0 ),
+		qDotZoneToHeatSetPt( 0.0 ),
+		qDotZoneToCoolSetPt( 0.0 )
 	{}
 
 	// Destructor
@@ -105,6 +115,11 @@ public: // Methods		MARK ANY THAT DON'T ALTER STATE const !!!
 
 	void
 	set_size();
+
+	Real64
+	residualSizing(
+		Real64 const airFlow // primary supply air flow rate in kg/s
+	);
 
 	void
 	control(
@@ -166,6 +181,7 @@ public: // Data
 	Real64 mDotCW; // current chilled water mass flow rate (kg/s)
 	Real64 cWTempIn; // current inlet chilled water temperature [C]
 	Real64 cWTempOut; // current outlet chilled water temperature [C]
+	int cWTempOutErrorCount; // counter for recurring errors in chilled water outlet temperature
 	int cWInNodeNum; // chilled water inlet node
 	int cWOutNodeNum; // chilled water outlet nod
 	PlantLocation cWLocation; // chilled water plant loop location
@@ -185,15 +201,11 @@ public: // Data
 	Real64 mDotHW; // current hot water mass flow rate (kg/s)
 	Real64 hWTempIn; // current inlet hot water temperature (C)
 	Real64 hWTempOut; // current outlet hot water temperature (C)
+	int hWTempOutErrorCount;// counter for recurring errors in hot water outlet temperature
 	int hWInNodeNum; // hot water inlet node
 	int hWOutNodeNum; // hot water outlet node
 	PlantLocation hWLocation; // hot water connection location structure
-	// simulation iteration controls
-	int beamLoadReSimIndex;
-	int beamCWMassFlowReSimIndex;
-	int beamCWOutletTempReSimIndex;
-	int beamHWMassFlowReSimIndex;
-	int beamHWOutletTempReSimIndex;
+
 	// output variables
 	Real64 beamCoolingEnergy; // beam sensible cooling energy of all beams in the zone [J]
 	Real64 beamCoolingRate; // beam sensible cooling rate of all beams in the zone (positive convention) [W]
@@ -207,13 +219,12 @@ public: // Data
 
 private: // data
 
-	bool myEnvrnFlag;
-	bool mySizeFlag;
-	bool plantLoopScanFlag;
-	bool zoneEquipmentListChecked;
+	bool myEnvrnFlag; // control when to re initialize for new environment period
+	bool mySizeFlag; // control when to run sizing method
+	bool plantLoopScanFlag; // control when to look up plant locations for water connections
+	bool zoneEquipmentListChecked; // control when to check zone equipment list was input correctly
 
-	int zoneIndex;
-	int zoneNodeIndex;
+
 	Real64 tDBZoneAirTemp;
 	Real64 tDBSystemAir;
 	Real64 mDotSystemAir;
