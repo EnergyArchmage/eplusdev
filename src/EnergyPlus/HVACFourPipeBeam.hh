@@ -45,6 +45,7 @@ public: // Creation
 		mDotCW( 0.0 ),
 		cWTempIn( 0.0 ),
 		cWTempOut( 0.0 ),
+		cWTempOutErrorCount( 0 ),
 		cWInNodeNum( 0 ),
 		cWOutNodeNum( 0 ),
 		cWLocation( PlantLocation( 0, 0, 0, 0 ) ),
@@ -62,6 +63,7 @@ public: // Creation
 		mDotHW( 0.0 ),
 		hWTempIn( 0.0 ),
 		hWTempOut( 0.0 ),
+		hWTempOutErrorCount( 0 ),
 		hWInNodeNum( 0 ),
 		hWOutNodeNum( 0 ),
 		hWLocation( PlantLocation( 0, 0, 0, 0 ) ),
@@ -169,7 +171,6 @@ public: // Data
 	bool beamCoolingPresent;  // true if chilled water system is connected to beam
 	Real64 vDotDesignCW; // Design chilled water volume flow rate (autosizable) (m3/s)
 	bool vDotDesignCWWasAutosized; // true if use input for chilled water flow was autosized
-	Real64 beamDesignCoolingLoad; // sotre design cooling load from sizing calculations ( W )
 	Real64 mDotDesignCW; // Design chilled water mass flow rate (kg/s)
 	Real64 qDotNormRatedCooling; // normalized cooling capacity at rating point (W/m)
 	Real64 deltaTempRatedCooling; // temperature difference between zone air and entering chilled water at rating point (delta C)
@@ -189,7 +190,6 @@ public: // Data
 	bool beamHeatingPresent; // true if hot water system is connected to beam
 	Real64 vDotDesignHW; // Design hot water volume flow rate (autosizable) (m3/s)
 	bool vDotDesignHWWasAutosized; // true if user input for hot water flow was autosized
-	Real64 beamDesignHeatingLoad; // store design heating load from sizing calculations ( W )
 	Real64 mDotDesignHW; // Design hot water mass flow rate (kg/s)
 	Real64 qDotNormRatedHeating; // normalized heating capacity at rating point (W/m)
 	Real64 deltaTempRatedHeating; // temperature difference between zone air and entering hot water at rating point (delta C)
