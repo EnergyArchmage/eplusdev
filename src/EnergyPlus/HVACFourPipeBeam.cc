@@ -738,6 +738,8 @@ namespace FourPipeBeam {
 			DataSizing::FinalSysSizing( DataZoneEquipment::ZoneEquipConfig(CurZoneEqNum).AirLoopNum ).DesMainVolFlow 
 				= DataSizing::FinalSysSizing( DataZoneEquipment::ZoneEquipConfig(CurZoneEqNum).AirLoopNum ).DesMainVolFlow 
 					+ ( this->vDotDesignPrimAir - originalTermUnitSizeVDot );
+			ReportSizingOutput( this->unitType, this->name, "AirLoopHVAC Design Supply Air Flow Rate Adjustment [m3/s]", 
+								( this->vDotDesignPrimAir - originalTermUnitSizeVDot ) );
 		}
 
 		if ( this->beamCoolingPresent ) {
