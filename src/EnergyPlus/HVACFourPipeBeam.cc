@@ -399,6 +399,8 @@ namespace FourPipeBeam {
 		}
 
 		if ( ! SysSizingCalc && this->mySizeFlag && ! this->plantLoopScanFlag ) {
+	//	if ( DataGlobals::SysSizingCalc && this->mySizeFlag && ! this->plantLoopScanFlag ) {
+
 			this->set_size(); // calculate autosize values (in any) and convert volume flow rates to mass flow rates
 			if (this->beamCoolingPresent ) { // initialize chilled water design mass flow rate in plant routines
 				InitComponentNodes( 0.0, 
@@ -506,7 +508,8 @@ namespace FourPipeBeam {
 		if ( beamHeatingPresent ) {
 			this->hWTempIn = Node( this->hWInNodeNum ).Temp;
 		}
-		this->mDotSystemAir = Node( this->airInNodeNum ).MassFlowRate;
+		this->mDotSystemAir = Node( this->airInNodeNum ).MassFlowRateMaxAvail;
+		Node( this->airInNodeNum  ).MassFlowRate = this->mDotSystemAir;
 		this->tDBZoneAirTemp = Node( this->zoneNodeIndex ).Temp;
 		this->tDBSystemAir = Node( this->airInNodeNum ).Temp;
 		this->cpZoneAir = Psychrometrics::PsyCpAirFnWTdb(	Node( this->zoneNodeIndex ).HumRat, 
@@ -548,7 +551,7 @@ namespace FourPipeBeam {
 		static int pltSizCoolNum( 0 ); // index of plant sizing object for the cooling loop
 		static int pltSizHeatNum( 0 );
 
-		bool ErrorsFound;
+		bool ErrorsFound = false;
 		Real64 rho; // local fluid density
 		Real64 Cp; // local fluid specific heat
 		bool noHardSizeAnchorAvailable; // aid for complex logic surrounding mix of hard size and autosizes
@@ -558,10 +561,16 @@ namespace FourPipeBeam {
 		Real64 maxFlowCool = 0.0;
 		Real64 mDotAirSolutionHeating = 0.0;
 		Real64 mDotAirSolutionCooling = 0.0;
+		Real64 originalTermUnitSizeVDot = 0.0;
 
 		this->mDotNormRatedPrimAir = this->vDotNormRatedPrimAir * DataEnvironment::StdRhoAir; // convert to standard (elevation adjusted) mass flow rate
 
 		noHardSizeAnchorAvailable = false;
+
+		if ( CurZoneEqNum > 0 ) {
+			originalTermUnitSizeVDot = std::max( TermUnitFinalZoneSizing( CurZoneEqNum ).DesCoolVolFlow, 
+												TermUnitFinalZoneSizing( CurZoneEqNum ).DesHeatVolFlow );
+		}
 
 		if ( this->totBeamLengthWasAutosized && this->vDotDesignPrimAirWasAutosized 
 			&& this->vDotDesignCWWasAutosized && this->vDotDesignHWWasAutosized ) {
@@ -621,8 +630,8 @@ namespace FourPipeBeam {
 			CheckZoneSizing( this->unitType, this->name );
 			//minimum flow rate is from air flow rate on the terminal unit final zone size ( typically ventilation minimum and may be too low)
 			Real64 minFlow = 0.0;
-			minFlow = DataEnvironment::StdRhoAir * max(	TermUnitFinalZoneSizing( CurZoneEqNum ).DesCoolVolFlow, 
-											TermUnitFinalZoneSizing( CurZoneEqNum ).DesHeatVolFlow );
+
+			minFlow = DataEnvironment::StdRhoAir * originalTermUnitSizeVDot;
 			minFlow = std::max( 0.0, minFlow );
 			//max flow is as if the air supply was sufficient to provide all the conditioning
 
@@ -721,9 +730,16 @@ namespace FourPipeBeam {
 				this->vDotDesignHW = this->vDotNormRatedHW * this->totBeamLength;
 			}
 		}
-
-		// fill in mass flow rate versions of working variables
+		// fill in mass flow rate versions of working variables (regardless of autosizing)
 		this->mDotDesignPrimAir = this->vDotDesignPrimAir * DataEnvironment::StdRhoAir;
+
+		if ( ( originalTermUnitSizeVDot > 0.0 ) && ( originalTermUnitSizeVDot < this->vDotDesignPrimAir ) && ( CurZoneEqNum > 0 ) ) {
+			// perturb system size to handle increase above ventilation requirement
+			DataSizing::FinalSysSizing( DataZoneEquipment::ZoneEquipConfig(CurZoneEqNum).AirLoopNum ).DesMainVolFlow 
+				= DataSizing::FinalSysSizing( DataZoneEquipment::ZoneEquipConfig(CurZoneEqNum).AirLoopNum ).DesMainVolFlow 
+					+ ( this->vDotDesignPrimAir - originalTermUnitSizeVDot );
+		}
+
 		if ( this->beamCoolingPresent ) {
 			rho = FluidProperties::GetDensityGlycol( DataPlant::PlantLoop( this->cWLocation.LoopNum ).FluidName, DataGlobals::InitConvTemp, 
 									DataPlant::PlantLoop( this->cWLocation.LoopNum ).FluidIndex, routineName );
