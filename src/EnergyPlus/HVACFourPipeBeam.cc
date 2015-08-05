@@ -504,9 +504,11 @@ namespace FourPipeBeam {
 		// do these initializations every time step
 		if ( beamCoolingPresent ) {
 			this->cWTempIn = Node( this->cWInNodeNum ).Temp;
+			this->cWTempOut = this->cWTempIn;
 		}
 		if ( beamHeatingPresent ) {
 			this->hWTempIn = Node( this->hWInNodeNum ).Temp;
+			this->hWTempOut = this->hWTempIn;
 		}
 		this->mDotSystemAir = Node( this->airInNodeNum ).MassFlowRateMaxAvail;
 		Node( this->airInNodeNum  ).MassFlowRate = this->mDotSystemAir;
@@ -1060,6 +1062,17 @@ namespace FourPipeBeam {
 				this->cWTempOut = (std::max( this->tDBSystemAir , this->tDBZoneAirTemp ) - 1.0 );
 				this->qDotBeamCooling = this->mDotCW * cp * (this->cWTempIn - this->cWTempOut);
 			}
+		} else {
+			this->mDotCW = 0.0;
+			SetComponentFlowRate( this->mDotCW,
+								this->cWInNodeNum,
+								this->cWOutNodeNum,
+								this->cWLocation.LoopNum,
+								this->cWLocation.LoopSideNum,
+								this->cWLocation.BranchNum,
+								this->cWLocation.CompNum );
+			this->cWTempOut = this->cWTempIn;
+			this->qDotBeamCooling = 0.0;
 		}
 		if ( this->heatingAvailable && this->mDotHW > 0.0 ){
 			//test hot water flow against plant, it might not all be available
@@ -1092,6 +1105,17 @@ namespace FourPipeBeam {
 				this->hWTempOut = (std::min( this->tDBSystemAir , this->tDBZoneAirTemp ) + 1.0 );
 				this->qDotBeamHeating = this->mDotHW * cp * (this->hWTempIn - this->hWTempOut);
 			}
+		} else {
+			this->mDotHW = 0.0;
+			SetComponentFlowRate(	this->mDotHW,
+								this->hWInNodeNum,
+								this->hWOutNodeNum,
+								this->hWLocation.LoopNum,
+								this->hWLocation.LoopSideNum,
+								this->hWLocation.BranchNum,
+								this->hWLocation.CompNum );
+			this->hWTempOut = this->hWTempIn;
+			this->qDotBeamHeating = 0.0;
 		}
 
 		this->qDotTotalDelivered = this->qDotSystemAir + this->qDotBeamCooling + this->qDotBeamHeating;
@@ -1106,7 +1130,7 @@ namespace FourPipeBeam {
 		this->mDotHW = 0.0;
 		this->mDotCW = cWFlow;
 		this->calc();
-		Residuum = ( ( ( this->qDotZoneReq - this->qDotSystemAir )- this->qDotBeamCooling ) 
+		Residuum = ( ( ( this->qDotZoneToCoolSetPt - this->qDotSystemAir )- this->qDotBeamCooling ) 
 						/ this->qDotBeamCoolingMax );
 
 		return Residuum;
@@ -1120,7 +1144,7 @@ namespace FourPipeBeam {
 		this->mDotHW = hWFlow;
 		this->mDotCW = 0.0;
 		this->calc();
-		Residuum = ( ( ( this->qDotZoneReq - this->qDotSystemAir ) - this->qDotBeamHeating ) 
+		Residuum = ( ( ( this->qDotZoneToHeatSetPt - this->qDotSystemAir ) - this->qDotBeamHeating ) 
 						/ this->qDotBeamHeatingMax );
 
 		return Residuum;
