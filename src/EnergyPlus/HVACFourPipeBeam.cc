@@ -736,7 +736,7 @@ namespace FourPipeBeam {
 		this->mDotDesignPrimAir = this->vDotDesignPrimAir * DataEnvironment::StdRhoAir;
 
 		if ( ( originalTermUnitSizeVDot > 0.0 ) && ( originalTermUnitSizeVDot != this->vDotDesignPrimAir ) && ( CurZoneEqNum > 0 ) ) {
-			// perturb system size to handle increase above ventilation requirement
+			// perturb system size to handle chnage in system size calculated without knowing about 4 pipe beam 
 			DataSizing::FinalSysSizing( DataZoneEquipment::ZoneEquipConfig(CurZoneEqNum).AirLoopNum ).DesMainVolFlow 
 				= DataSizing::FinalSysSizing( DataZoneEquipment::ZoneEquipConfig(CurZoneEqNum).AirLoopNum ).DesMainVolFlow 
 					+ ( this->vDotDesignPrimAir - originalTermUnitSizeVDot );
@@ -746,6 +746,9 @@ namespace FourPipeBeam {
 			DataSizing::FinalSysSizing( DataZoneEquipment::ZoneEquipConfig(CurZoneEqNum).AirLoopNum ).DesHeatVolFlow 
 				= DataSizing::FinalSysSizing( DataZoneEquipment::ZoneEquipConfig(CurZoneEqNum).AirLoopNum ).DesHeatVolFlow 
 					+ ( this->vDotDesignPrimAir - originalTermUnitSizeVDot );
+			DataSizing::FinalSysSizing( DataZoneEquipment::ZoneEquipConfig(CurZoneEqNum).AirLoopNum ).MassFlowAtCoolPeak 
+				= DataSizing::FinalSysSizing( DataZoneEquipment::ZoneEquipConfig(CurZoneEqNum).AirLoopNum ).MassFlowAtCoolPeak 
+					+ ( this->vDotDesignPrimAir - originalTermUnitSizeVDot ) * DataEnvironment::StdRhoAir;
 
 			ReportSizingOutput( this->unitType, this->name, "AirLoopHVAC Design Supply Air Flow Rate Adjustment [m3/s]", 
 								( this->vDotDesignPrimAir - originalTermUnitSizeVDot ) );
