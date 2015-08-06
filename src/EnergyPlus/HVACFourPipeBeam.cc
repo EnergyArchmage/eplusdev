@@ -560,7 +560,7 @@ namespace FourPipeBeam {
 		Real64 cpAir = 0.0;
 		int SolFlag;
 		Real64 ErrTolerance = 0.001;
-		Real64 maxFlowCool = 0.0;
+
 		Real64 mDotAirSolutionHeating = 0.0;
 		Real64 mDotAirSolutionCooling = 0.0;
 		Real64 originalTermUnitSizeVDot = 0.0;
@@ -627,12 +627,11 @@ namespace FourPipeBeam {
 		if ( noHardSizeAnchorAvailable && ( CurZoneEqNum > 0 ) ) { // need to use central sizing results to calculate 
 
 			// set up for solver
-			// minimum flow rate is 
 
 			CheckZoneSizing( this->unitType, this->name );
 			//minimum flow rate is from air flow rate on the terminal unit final zone size ( typically ventilation minimum and may be too low)
 			Real64 minFlow = 0.0;
-
+			Real64 maxFlowCool = 0.0;
 			minFlow = DataEnvironment::StdRhoAir * originalTermUnitSizeVDot;
 			minFlow = std::max( 0.0, minFlow );
 			//max flow is as if the air supply was sufficient to provide all the conditioning
@@ -647,7 +646,9 @@ namespace FourPipeBeam {
 					maxFlowCool = FinalZoneSizing( CurZoneEqNum ).DesCoolLoad 
 							/ (cpAir * 2.0) ;
 				}
-
+				if ( minFlow * 3.0 >= maxFlowCool ) {
+					minFlow = maxFlowCool / 3.0 ;
+				} 
 
 				pltSizCoolNum = MyPlantSizingIndex( "four pipe beam unit", this->name, this->cWInNodeNum, this->cWOutNodeNum, ErrorsFound );
 				if ( pltSizCoolNum == 0 ) {
@@ -678,10 +679,10 @@ namespace FourPipeBeam {
 					ShowContinueError( "  Bad size limits" );
 				}
 			}
-			Real64 maxFlowHeat = 0.0;
+			
 			if ( beamHeatingPresent ) {
 				cpAir = PsyCpAirFnWTdb( FinalZoneSizing( CurZoneEqNum ).HeatDesHumRat, FinalZoneSizing( CurZoneEqNum ).HeatDesTemp );
-				
+				Real64 maxFlowHeat = 0.0;
 				if ( ( FinalZoneSizing( CurZoneEqNum ).DesHeatCoilInTempTU - FinalZoneSizing( CurZoneEqNum ).ZoneTempAtHeatPeak ) > 2.0) { // avoid div by zero and blow up
 					maxFlowHeat = FinalZoneSizing( CurZoneEqNum ).DesHeatLoad 
 							/ (cpAir * ( FinalZoneSizing( CurZoneEqNum ).DesHeatCoilInTempTU - FinalZoneSizing( CurZoneEqNum ).ZoneTempAtHeatPeak ) );
@@ -689,7 +690,6 @@ namespace FourPipeBeam {
 					maxFlowHeat = FinalZoneSizing( CurZoneEqNum ).DesHeatLoad 
 							/ (cpAir * 2.0) ;
 				}
-
 
 				pltSizHeatNum = MyPlantSizingIndex( "four pipe beam unit", this->name, this->hWInNodeNum, this->hWOutNodeNum, ErrorsFound );
 				if ( pltSizHeatNum == 0 ) {
@@ -711,7 +711,7 @@ namespace FourPipeBeam {
 				this->airAvailable = true;
 				this->heatingAvailable = true;
 				this->coolingAvailable = false;
-				SolveRegulaFalsi( ErrTolerance, 50, SolFlag, mDotAirSolutionHeating, std::bind( &HVACFourPipeBeam::residualSizing, this, _1  ), minFlow, maxFlowHeat );
+				SolveRegulaFalsi( ErrTolerance, 50, SolFlag, mDotAirSolutionHeating, std::bind( &HVACFourPipeBeam::residualSizing, this, _1  ), 0.0, maxFlowHeat );
 				if ( SolFlag == -1 ) {
 					ShowWarningError( "Heating load sizing search failed in four pipe beam unit called " + this->name );
 					ShowContinueError( "  Iteration limit exceeded in calculating size for design heating load" );
@@ -735,11 +735,18 @@ namespace FourPipeBeam {
 		// fill in mass flow rate versions of working variables (regardless of autosizing)
 		this->mDotDesignPrimAir = this->vDotDesignPrimAir * DataEnvironment::StdRhoAir;
 
-		if ( ( originalTermUnitSizeVDot > 0.0 ) && ( originalTermUnitSizeVDot < this->vDotDesignPrimAir ) && ( CurZoneEqNum > 0 ) ) {
+		if ( ( originalTermUnitSizeVDot > 0.0 ) && ( originalTermUnitSizeVDot != this->vDotDesignPrimAir ) && ( CurZoneEqNum > 0 ) ) {
 			// perturb system size to handle increase above ventilation requirement
 			DataSizing::FinalSysSizing( DataZoneEquipment::ZoneEquipConfig(CurZoneEqNum).AirLoopNum ).DesMainVolFlow 
 				= DataSizing::FinalSysSizing( DataZoneEquipment::ZoneEquipConfig(CurZoneEqNum).AirLoopNum ).DesMainVolFlow 
 					+ ( this->vDotDesignPrimAir - originalTermUnitSizeVDot );
+			DataSizing::FinalSysSizing( DataZoneEquipment::ZoneEquipConfig(CurZoneEqNum).AirLoopNum ).DesCoolVolFlow 
+				= DataSizing::FinalSysSizing( DataZoneEquipment::ZoneEquipConfig(CurZoneEqNum).AirLoopNum ).DesCoolVolFlow 
+					+ ( this->vDotDesignPrimAir - originalTermUnitSizeVDot );
+			DataSizing::FinalSysSizing( DataZoneEquipment::ZoneEquipConfig(CurZoneEqNum).AirLoopNum ).DesHeatVolFlow 
+				= DataSizing::FinalSysSizing( DataZoneEquipment::ZoneEquipConfig(CurZoneEqNum).AirLoopNum ).DesHeatVolFlow 
+					+ ( this->vDotDesignPrimAir - originalTermUnitSizeVDot );
+
 			ReportSizingOutput( this->unitType, this->name, "AirLoopHVAC Design Supply Air Flow Rate Adjustment [m3/s]", 
 								( this->vDotDesignPrimAir - originalTermUnitSizeVDot ) );
 		}
