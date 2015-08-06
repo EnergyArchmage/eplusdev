@@ -230,6 +230,50 @@ namespace MixedAir {
 
 	// Functions
 
+	Real64 OAGetFlowRate( int OAPtr )
+	{
+		Real64 FlowRate( 0 );
+		if ( ( OAPtr > 0 ) && ( OAPtr <= NumOAControllers ) && ( StdRhoAir != 0 ) )
+		{
+			FlowRate = OAController( OAPtr ).OAMassFlow / StdRhoAir;
+		}
+		return FlowRate;
+	}
+	Real64 OAGetMinFlowRate( int OAPtr )
+	{
+		Real64 MinFlowRate( 0 );
+		if ( ( OAPtr > 0 ) && ( OAPtr <= NumOAControllers ) )
+		{
+			MinFlowRate = OAController( OAPtr ).MinOA;
+		}
+		return MinFlowRate;
+	}
+	void OASetDemandManagerVentilationState( int OAPtr, bool aState )
+	{
+		if ( ( OAPtr > 0 ) && ( OAPtr <= NumOAControllers ) )
+		{
+			OAController( OAPtr ).ManageDemand = aState;
+		}
+	}
+	void OASetDemandManagerVentilationFlow( int OAPtr, Real64 aFlow )
+	{
+		if ( ( OAPtr > 0 ) && ( OAPtr <= NumOAControllers ) )
+		{
+			OAController( OAPtr ).DemandLimitFlowRate = aFlow * StdRhoAir;
+		}
+	}
+	int GetOAController( std::string const & OAName )
+	{
+		int CurrentOAController( 0 );
+		for ( int i = 1; i <= NumOAControllers; i++ )
+		{
+			if ( OAName == OAController( i ).Name ) {
+				CurrentOAController = i;
+				break;
+			}
+		}
+		return CurrentOAController;
+	}
 	// Clears the global data in MixedAir.
 	// Needed for unit tests, should not be normally called.
 	void
@@ -3384,6 +3428,8 @@ namespace MixedAir {
 		using DataHeatBalFanSys::ZoneAirHumRat;
 		using DataContaminantBalance::ZoneSysContDemand;
 		using DataGlobals::DisplayExtraWarnings;
+		using DataGlobals::WarmupFlag;
+		using DataGlobals::DoingSizing;
 
 		// Locals
 		// SUBROUTINE ARGUMENT DEFINITIONS
@@ -4167,6 +4213,8 @@ namespace MixedAir {
 			OAController( OAControllerNum ).OAMassFlow = min( OAController( OAControllerNum ).OAMassFlow, OAController( OAControllerNum ).MaxOAMassFlowRate );
 		}
 
+		if ( !WarmupFlag && !DoingSizing && ( OAController( OAControllerNum ).ManageDemand ) && ( OAController( OAControllerNum ).OAMassFlow > OAController( OAControllerNum ).DemandLimitFlowRate ) )
+			OAController( OAControllerNum ).OAMassFlow = OAController( OAControllerNum ).DemandLimitFlowRate;
 		if ( OAController( OAControllerNum ).EMSOverrideOARate ) {
 			OAController( OAControllerNum ).OAMassFlow = OAController( OAControllerNum ).EMSOARateValue;
 		}
@@ -4589,6 +4637,8 @@ namespace MixedAir {
 
 		// Using/Aliasing
 		using namespace DataLoopNode;
+		using DataGlobals::WarmupFlag;
+		using DataGlobals::DoingSizing;
 
 		// Locals
 		// SUBROUTINE ARGUMENT DEFINITIONS
@@ -4614,17 +4664,34 @@ namespace MixedAir {
 
 		if ( OAController( OAControllerNum ).ControllerType_Num == ControllerOutsideAir ) {
 			// The outside air controller sets the outside air flow rate and the relief air flow rate
+			if ( !WarmupFlag && !DoingSizing && ( OAController( OAControllerNum ).ManageDemand ) && ( OAController( OAControllerNum ).OAMassFlow > OAController( OAControllerNum ).DemandLimitFlowRate ) )
+			{
+				Node( OutAirNodeNum ).MassFlowRate = OAController( OAControllerNum ).DemandLimitFlowRate;
+				Node( InletAirNodeNum ).MassFlowRate = OAController( OAControllerNum ).DemandLimitFlowRate;
+				Node( OutAirNodeNum ).MassFlowRateMaxAvail = OAController( OAControllerNum ).DemandLimitFlowRate;
+			}
+			else
+			{
 			Node( OutAirNodeNum ).MassFlowRate = OAController( OAControllerNum ).OAMassFlow;
 			Node( InletAirNodeNum ).MassFlowRate = OAController( OAControllerNum ).OAMassFlow;
+				Node( OutAirNodeNum ).MassFlowRateMaxAvail = OAController( OAControllerNum ).OAMassFlow;
+			}
 			Node( RelAirNodeNum ).MassFlowRate = OAController( OAControllerNum ).RelMassFlow;
-			Node( OutAirNodeNum ).MassFlowRateMaxAvail = OAController( OAControllerNum ).OAMassFlow;
 		} else {
 			// The ERV controller sets the supply and secondary inlet node information for the Stand Alone ERV
 			// Currently, the Stand Alone ERV only has constant air flows (supply and exhaust), and these are
 			// already set in HVACStandAloneERV.cc (subroutine init). Therefore, these flow assignments below are
 			// currently redundant but may be useful in the future as mass flow rates can vary based on the controller signal.
+			if ( !WarmupFlag && !DoingSizing && ( OAController( OAControllerNum ).ManageDemand ) && ( OAController( OAControllerNum ).OAMassFlow > OAController( OAControllerNum ).DemandLimitFlowRate ) )
+			{
+				Node( OutAirNodeNum ).MassFlowRate = OAController( OAControllerNum ).DemandLimitFlowRate;
+				Node( OutAirNodeNum ).MassFlowRateMaxAvail = OAController( OAControllerNum ).DemandLimitFlowRate;
+			}
+			else
+			{
 			Node( OutAirNodeNum ).MassFlowRate = OAController( OAControllerNum ).OAMassFlow;
 			Node( OutAirNodeNum ).MassFlowRateMaxAvail = OAController( OAControllerNum ).OAMassFlow;
+			}
 			Node( RetAirNodeNum ).MassFlowRate = Node( OAController( OAControllerNum ).RetNode ).MassFlowRate;
 			Node( RetAirNodeNum ).MassFlowRateMaxAvail = Node( OAController( OAControllerNum ).RetNode ).MassFlowRate;
 		}
