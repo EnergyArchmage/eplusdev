@@ -38631,7 +38631,7 @@ AirTerminal:SingleDuct:ConstantVolume:FourPipeInduction,
        \type object-list
        \object-list ZoneMixers
 
-AirTerminal:SingleDuct:ConstantVolume:FourPipeBeam
+AirTerminal:SingleDuct:ConstantVolume:FourPipeBeam,
        \memo Central air system terminal unit, single duct, constant volume, 
        \memo with heating and/or cooling.  
        \memo Operates as two-pipe unit if heating or cooling water is omitted.
