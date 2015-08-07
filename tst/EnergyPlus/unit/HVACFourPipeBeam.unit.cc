@@ -4,7 +4,11 @@
 #include <gtest/gtest.h>
 
 #include "Fixtures/HVACFixture.hh"
+#include <AirTerminalUnit.hh>
+#include <HVACFourPipeBeam.hh>
+#include <DataDefineEquip.hh>
 
+#include <EnergyPlus/CurveManager.hh>
 
 
 namespace EnergyPlus {
@@ -15,9 +19,9 @@ namespace EnergyPlus {
 		"Version,8.4;",
 		"AirTerminal:SingleDuct:ConstantVolume:FourPipeBeam,",
 		"    Perimeter_top_ZN_4 4pipe Beam, !- Name",
-		"    ALWAYS_ON , !- Primary Air Availability Schedule Name",
-		"    ALWAYS_ON , !- Cooling Availability Schedule Name",
-		"    ALWAYS_ON , !- Heating Availability Schedule Name",
+		"    , !- Primary Air Availability Schedule Name",
+		"    , !- Cooling Availability Schedule Name",
+		"    , !- Heating Availability Schedule Name",
 		"    Perimeter_top_ZN_4 4pipe Beam Inlet Node Name , !- Primary Air Inlet Node Name",
 		"    Perimeter_top_ZN_4 4pipe Beam Outlet Node Name , !- Primary Air Outlet Node Name",
 		"    Perimeter_top_ZN_4 4pipe Beam CW Inlet Node , !- Chilled Water Inlet Node Name",
@@ -99,6 +103,29 @@ namespace EnergyPlus {
 		} );
 	
 		ASSERT_FALSE( process_idf( idf_objects ) );
+
+		DataZoneEquipment::ZoneEquipConfig.allocate( 1 );
+		DataZoneEquipment::ZoneEquipConfig( 1 ).NumInletNodes = 1;
+		DataZoneEquipment::ZoneEquipConfig( 1 ).InletNode.allocate( 1 );
+		DataZoneEquipment::ZoneEquipConfig( 1 ).AirDistUnitCool.allocate( 1 );
+		DataZoneEquipment::ZoneEquipConfig( 1 ).AirDistUnitHeat.allocate( 1 );
+
+		DataZoneEquipment::ZoneEquipConfig( 1 ).InletNode( 1 ) = 2;
+
+
+		DataDefineEquip::AirDistUnit.allocate( 1 );
+		DataDefineEquip::AirDistUnit( 1 ).EquipName( 1 ) = "PERIMETER_TOP_ZN_4 4PIPE BEAM"; // needs to be uppercased, or item will not be found at lie 2488 in IP
+		DataDefineEquip::AirDistUnit( 1 ).OutletNodeNum = 2;
+
+		DataDefineEquip::AirDistUnit( 1 ).airTerminalPtr = FourPipeBeam::HVACFourPipeBeam::fourPipeBeamFactory( DataDefineEquip::SingleDuctConstVolFourPipeBeam, DataDefineEquip::AirDistUnit( 1 ).EquipName( 1 ) );
+
+
+		EXPECT_EQ( DataDefineEquip::AirDistUnit( 1 ).airTerminalPtr->name, "Perimeter_top_ZN_4 4pipe Beam");
+
+		EXPECT_EQ( DataDefineEquip::AirDistUnit( 1 ).airTerminalPtr->airInNodeNum, DataZoneEquipment::ZoneEquipConfig( 1 ).AirDistUnitHeat( 1 ).InNode );
+
+		EXPECT_EQ( DataDefineEquip::AirDistUnit( 1 ).airTerminalPtr->airOutNodeNum, DataZoneEquipment::ZoneEquipConfig( 1 ).AirDistUnitHeat( 1 ).OutNode );
+
 
 	}
 
