@@ -300,7 +300,7 @@ namespace FourPipeBeam {
 		if ( thisBeam->aDUNum == 0 ) {
 			ShowSevereError( routineName + "No matching Air Distribution Unit, for Unit = [" + cCurrentModuleObject + ',' + thisBeam->name + "]." );
 			ShowContinueError( "...should have outlet node=" + DataLoopNode::NodeID( thisBeam->airOutNodeNum ) );
-			//          ErrorsFound=.TRUE.
+
 		}
 
 		if ( found && !ErrorsFound ) {
