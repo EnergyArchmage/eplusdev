@@ -40,6 +40,14 @@ namespace FourPipeBeam {
 
 	Array1D< std::shared_ptr< HVACFourPipeBeam > > FourPipeBeams; // dimension to number of machines
 
+	// Needed for unit tests, should not be normally called.
+	void
+	clear_state()
+	{
+		FourPipeBeams.deallocate();
+	};
+
+
 //	HVACFourPipeBeam::HVACFourPipeBeam(){}
 
 	std::shared_ptr< AirTerminalUnit > 
@@ -273,6 +281,8 @@ namespace FourPipeBeam {
 			if ( ! ZoneEquipConfig( ctrlZone ).IsControlled ) continue;
 			for ( supAirIn = 1; supAirIn <= ZoneEquipConfig( ctrlZone ).NumInletNodes; ++supAirIn ) {
 				if ( thisBeam->airOutNodeNum == ZoneEquipConfig( ctrlZone ).InletNode( supAirIn ) ) {
+					thisBeam->zoneIndex = ctrlZone;
+					thisBeam->zoneNodeIndex = ZoneEquipConfig( ctrlZone ).ZoneNode;
 					ZoneEquipConfig( ctrlZone ).AirDistUnitCool( supAirIn ).InNode = thisBeam->airInNodeNum;
 					ZoneEquipConfig( ctrlZone ).AirDistUnitCool( supAirIn ).OutNode = thisBeam->airOutNodeNum;
 					if ( thisBeam->beamHeatingPresent ) {
@@ -300,7 +310,7 @@ namespace FourPipeBeam {
 		if ( thisBeam->aDUNum == 0 ) {
 			ShowSevereError( routineName + "No matching Air Distribution Unit, for Unit = [" + cCurrentModuleObject + ',' + thisBeam->name + "]." );
 			ShowContinueError( "...should have outlet node=" + DataLoopNode::NodeID( thisBeam->airOutNodeNum ) );
-
+			ErrorsFound = true;
 		}
 
 		if ( found && !ErrorsFound ) {
@@ -319,14 +329,11 @@ namespace FourPipeBeam {
 	void
 	HVACFourPipeBeam::simulate(
 		bool const FirstHVACIteration, // TRUE if first HVAC iteration in time step
-		int const ZoneNum, // index of zone served by the unit
-		int const ZoneNodeNum, // zone node number of zone served by the unit
 		Real64 & NonAirSysOutput // convective cooling by the beam system [W]
 	)
 	{
 
-		this->zoneNodeIndex = ZoneNodeNum;
-		this->zoneIndex  = ZoneNum;
+
 		// initialize the unit
 		this->init( FirstHVACIteration );
 

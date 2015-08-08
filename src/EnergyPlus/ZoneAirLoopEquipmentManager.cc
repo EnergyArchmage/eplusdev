@@ -612,7 +612,7 @@ namespace ZoneAirLoopEquipmentManager {
 				SimCoolBeam( AirDistUnit( AirDistUnitNum ).EquipName( AirDistCompNum ), FirstHVACIteration, ActualZoneNum, ZoneEquipConfig( ControlledZoneNum ).ZoneNode, AirDistUnit( AirDistUnitNum ).EquipIndex( AirDistCompNum ), NonAirSysOutput );
 
 			} else if ( SELECT_CASE_var == SingleDuctConstVolFourPipeBeam ) {
-				AirDistUnit( AirDistUnitNum ).airTerminalPtr->simulate(FirstHVACIteration, ActualZoneNum, ZoneEquipConfig( ControlledZoneNum ).ZoneNode,  NonAirSysOutput  );
+				AirDistUnit( AirDistUnitNum ).airTerminalPtr->simulate(FirstHVACIteration,  NonAirSysOutput  );
 
 			} else if ( SELECT_CASE_var == SingleDuctUserDefined ) {
 				SimAirTerminalUserDefined( AirDistUnit( AirDistUnitNum ).EquipName( AirDistCompNum ), FirstHVACIteration, ActualZoneNum, ZoneEquipConfig( ControlledZoneNum ).ZoneNode, AirDistUnit( AirDistUnitNum ).EquipIndex( AirDistCompNum ) );

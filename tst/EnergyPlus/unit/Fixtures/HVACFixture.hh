@@ -19,6 +19,8 @@
 #include <EnergyPlus/DataDefineEquip.hh>
 #include <EnergyPlus/BranchNodeConnections.hh>
 #include <EnergyPlus/DataZoneEquipment.hh>
+#include <EnergyPlus/DataHeatBalance.hh>
+#include <EnergyPlus/DataPlant.hh>
 
 namespace EnergyPlus {
 
@@ -49,6 +51,8 @@ namespace EnergyPlus {
 			OutAirNodeManager::clear_state();
 			DataDefineEquip::clear_state();
 			DataZoneEquipment::clear_state();
+			DataHeatBalance::clear_state();
+			DataPlant::clear_state();
 			
 			EnergyPlusFixture::TearDown();  // Remember to tear down the base fixture after cleaning up derived fixture!
 		}
