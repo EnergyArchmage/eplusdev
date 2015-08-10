@@ -21,6 +21,8 @@
 #include <EnergyPlus/DataZoneEquipment.hh>
 #include <EnergyPlus/DataHeatBalance.hh>
 #include <EnergyPlus/DataPlant.hh>
+#include <EnergyPlus/GlobalNames.hh>
+#include <EnergyPlus/PlantManager.hh>
 
 namespace EnergyPlus {
 
@@ -53,6 +55,7 @@ namespace EnergyPlus {
 			DataZoneEquipment::clear_state();
 			DataHeatBalance::clear_state();
 			DataPlant::clear_state();
+			GlobalNames::clear_state();
 			
 			EnergyPlusFixture::TearDown();  // Remember to tear down the base fixture after cleaning up derived fixture!
 		}

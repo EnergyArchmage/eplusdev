@@ -141,7 +141,7 @@ namespace EnergyPlus {
 		Real64 NonAirSysOutput;
 
 	//	DataDefineEquip::AirDistUnit( 1 ).airTerminalPtr->simulate(FirstHVACIteration,zoneIndex, DataZoneEquipment::ZoneEquipConfig( 1 ).ZoneNode, NonAirSysOutput);
-
+		DataDefineEquip::AirDistUnit( 1 ).airTerminalPtr->clear_state();
 	}
 
 
@@ -234,7 +234,7 @@ namespace EnergyPlus {
 		"    1.2857,   1.0778; ",
 		} );
 	
-
+		ASSERT_FALSE( process_idf( idf_objects ) );
 		DataGlobals::NumOfZones = 1;
 
 		DataHeatBalance::Zone.allocate( DataGlobals::NumOfZones );
@@ -259,7 +259,8 @@ namespace EnergyPlus {
 
 		DataPlant::PlantLoop.allocate( 2 );
 
-	
+
+		DataDefineEquip::AirDistUnit( 1 ).airTerminalPtr->clear_state();
 	
 	}
 }
