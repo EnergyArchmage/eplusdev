@@ -437,7 +437,7 @@ namespace FourPipeBeam {
 		// Do the Begin Environment initializations
 		if ( BeginEnvrnFlag && this->myEnvrnFlag ) {
 
-			Node( this->airInNodeNum  ).MassFlowRateMax  = this->mDotDesignPrimAir;
+			Node( this->airInNodeNum  ).MassFlowRateMax = this->mDotDesignPrimAir;
 			Node( this->airOutNodeNum ).MassFlowRateMax = this->mDotDesignPrimAir;
 			Node( this->airInNodeNum  ).MassFlowRateMin = 0.0;
 			Node( this->airOutNodeNum ).MassFlowRateMin = 0.0;
@@ -950,11 +950,11 @@ namespace FourPipeBeam {
 				ErrTolerance = 0.01;
 				SolveRegulaFalsi( ErrTolerance, 50, SolFlag, this->mDotCW, std::bind( &HVACFourPipeBeam::residualCooling, this, _1  ), 0.0, this->mDotDesignCW );
 				if ( SolFlag == -1 ) {
-					ShowWarningError( "Cold water control failed in four pipe beam unit called " + this->name );
-					ShowContinueError( "  Iteration limit exceeded in calculating cold water mass flow rate" );
+					//ShowWarningError( "Cold water control failed in four pipe beam unit called " + this->name );
+					//ShowContinueError( "  Iteration limit exceeded in calculating cold water mass flow rate" );
 				} else if ( SolFlag == -2 ) {
-					ShowWarningError( "Cold water control failed in four pipe beam unit called " + this->name );
-					ShowContinueError( "  Bad cold water flow limits" );
+					//ShowWarningError( "Cold water control failed in four pipe beam unit called " + this->name );
+					//ShowContinueError( "  Bad cold water flow limits" );
 				}
 				this->calc();
 				NonAirSysOutput = this->qDotBeamCooling;
@@ -980,11 +980,11 @@ namespace FourPipeBeam {
 				ErrTolerance = 0.01;
 				SolveRegulaFalsi( ErrTolerance, 50, SolFlag, this->mDotHW, std::bind( &HVACFourPipeBeam::residualHeating, this , _1), 0.0, this->mDotDesignHW);
 				if ( SolFlag == -1 ) {
-					ShowWarningError( "Hot water control failed in four pipe beam unit called " + this->name );
-					ShowContinueError( "  Iteration limit exceeded in calculating hot water mass flow rate" );
+					//ShowWarningError( "Hot water control failed in four pipe beam unit called " + this->name );
+					//ShowContinueError( "  Iteration limit exceeded in calculating hot water mass flow rate" );
 				} else if ( SolFlag == -2 ) {
-					ShowWarningError( "Hot water control failed in four pipe beam called " + this->name );
-					ShowContinueError( "  Bad hot water flow limits" );
+					//ShowWarningError( "Hot water control failed in four pipe beam called " + this->name );
+					//ShowContinueError( "  Bad hot water flow limits" );
 				}
 				this->calc();
 				NonAirSysOutput = this->qDotBeamHeating;
